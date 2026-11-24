@@ -265,10 +265,17 @@ class MainActivity : Activity() {
     }
     private fun getWifiIpAddress(): String {
         return try {
-            val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-            val ip = wifi.connectionInfo.ipAddress
-            if (ip == 0) "请连接 Wi-Fi" else Formatter.formatIpAddress(ip)
-        } catch (_: Exception) { "请连接 Wi-Fi" }
+            val interfaces = java.util.Collections.list(java.net.NetworkInterface.getNetworkInterfaces())
+                .filter { it.isUp && !it.isLoopback && !it.name.startsWith("tun") && !it.name.startsWith("wg") }
+            val addresses = interfaces.flatMap { iface ->
+                java.util.Collections.list(iface.inetAddresses)
+                    .filter { it is java.net.Inet4Address && it.isSiteLocalAddress }
+                    .map { Pair(iface.name, it.hostAddress ?: "") }
+            }
+            val chosen = addresses.sortedBy { if (it.first.contains("wlan", true) || it.first.contains("wifi", true) || it.first.contains("ap", true)) 0 else 1 }
+                .firstOrNull()?.second
+            chosen ?: "请连接 Wi-Fi 或开启手机热点"
+        } catch (_: Exception) { "请连接 Wi-Fi 或开启手机热点" }
     }
     private fun startVpn() {
         Usqueandroid.setSNI("")
@@ -451,9 +458,7 @@ class ProxyService : Service() {
                     output.write("HTTP/1.1 200 Connection Established\r\n\r\n".toByteArray(Charsets.ISO_8859_1))
                     output.flush()
                     socket.soTimeout = 0; remote.soTimeout = 0
-                    val a = Thread { copyStream(input, remote.getOutputStream()) }
-                    val b = Thread { copyStream(remote.getInputStream(), output) }
-                    a.start(); b.join(30000); try { socket.close(); remote.close() } catch (_: Exception) {}; a.join(1000)
+                    relay(socket, remote, input, output)
                 } else {
                     if (uri == null || uri.scheme != "http") { respond(output, "400 Bad Request"); return }
                     val path = (uri.rawPath.ifEmpty { "/" }) + (if (uri.rawQuery != null) "?" + uri.rawQuery else "")
@@ -463,8 +468,7 @@ class ProxyService : Service() {
                     req.append("Connection: close\r\n\r\n")
                     remote.getOutputStream().write(req.toString().toByteArray(Charsets.ISO_8859_1))
                     remote.getOutputStream().flush()
-                    input.copyTo(remote.getOutputStream()); remote.getOutputStream().flush()
-                    remote.getInputStream().copyTo(output); output.flush()
+                    relay(socket, remote, input, output)
                 }
             }
         }
@@ -480,6 +484,16 @@ class ProxyService : Service() {
     private fun respond(out: BufferedOutputStream, status: String) {
         out.write(("HTTP/1.1 " + status + "\r\nConnection: close\r\nContent-Length: 0\r\n\r\n").toByteArray(Charsets.ISO_8859_1))
         out.flush()
+    }
+
+    private fun relay(client: Socket, upstream: Socket, clientInput: java.io.InputStream, clientOutput: java.io.OutputStream) {
+        val upstreamToClient = Thread { copyStream(upstream.getInputStream(), clientOutput) }
+        val clientToUpstream = Thread { copyStream(clientInput, upstream.getOutputStream()) }
+        upstreamToClient.start()
+        clientToUpstream.start()
+        upstreamToClient.join()
+        try { client.close(); upstream.close() } catch (_: Exception) {}
+        clientToUpstream.join(1000)
     }
 
     private fun copyStream(input: java.io.InputStream, output: java.io.OutputStream) {
