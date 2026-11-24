@@ -191,7 +191,7 @@ class MainActivity : Activity() {
             Toast.makeText(this, "请先断开 VPN，再进行节点测速", Toast.LENGTH_SHORT).show()
             return
         }
-        val configPath = "\${filesDir.absolutePath}/config.json"
+        val configPath = "${filesDir.absolutePath}/config.json"
         if (!Usqueandroid.isRegistered(configPath)) {
             Toast.makeText(this, "请先连接一次以完成 WARP 注册，再进行测速", Toast.LENGTH_LONG).show()
             return
@@ -214,7 +214,7 @@ class MainActivity : Activity() {
                 val raw = try {
                     Usqueandroid.testEndpoint(configPath, endpoint, 5000L)
                 } catch (t: Throwable) {
-                    "ERR:\${t.message ?: "测速失败"}"
+                    "ERR:${t.message ?: "测速失败"}"
                 }
                 if (raw.startsWith("OK:")) ProbeResult(endpoint, raw.removePrefix("OK:").toLongOrNull(), null)
                 else ProbeResult(endpoint, null, raw.removePrefix("ERR:").ifBlank { "握手失败" })
@@ -233,12 +233,12 @@ class MainActivity : Activity() {
         val selected = prefs.getString(KEY_SELECTED_ENDPOINT, "") ?: ""
         val labels = probeResults.map { result ->
             val mark = if (result.endpoint == selected) "  ✓ 当前使用" else ""
-            if (result.latencyMs != null) "\${result.endpoint}    \${result.latencyMs} ms$mark"
-            else "\${result.endpoint}    不可用$mark"
+            if (result.latencyMs != null) "${result.endpoint}    ${result.latencyMs} ms$mark"
+            else "${result.endpoint}    不可用$mark"
         }.toTypedArray()
         val count = probeResults.count { it.latencyMs != null }
         AlertDialog.Builder(this)
-            .setTitle("测速结果（成功 $count/\${probeResults.size}）")
+            .setTitle("测速结果（成功 $count/${probeResults.size}）")
             .setItems(labels) { _, which ->
                 val result = probeResults.getOrNull(which) ?: return@setItems
                 if (result.latencyMs == null) {
@@ -251,7 +251,7 @@ class MainActivity : Activity() {
                 }
                 prefs.edit().putString(KEY_SELECTED_ENDPOINT, result.endpoint).apply()
                 Usqueandroid.setEndpoint(result.endpoint)
-                Toast.makeText(this, "已保存节点：\${result.endpoint}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "已保存节点：${result.endpoint}", Toast.LENGTH_SHORT).show()
                 updateUI()
             }
             .setPositiveButton("重新测速") { _, _ -> runEndpointSpeedTest() }
@@ -288,7 +288,7 @@ class MainActivity : Activity() {
     }
 
     private fun updateUI() {
-        val configPath = "\${filesDir.absolutePath}/config.json"
+        val configPath = "${filesDir.absolutePath}/config.json"
         if (UsqueVpnService.isRunning) {
             if (UsqueVpnService.isConnected) {
                 statusText.text = "已连接"
@@ -375,4 +375,13 @@ for old, new in [
 ]:
     service = service.replace(old, new)
 write("kotlin/com/abobo/usquevpn/UsqueVpnService.kt", service)
+
+# Keep the Android package metadata aligned with the visible app version.
+gradle = ROOT.parents[2] / "app/build.gradle.kts"
+if gradle.exists():
+    build = gradle.read_text(encoding="utf-8")
+    build = build.replace("versionCode = 4", "versionCode = 5")
+    build = build.replace('versionName = "1.0.4"', 'versionName = "1.1.0"')
+    gradle.write_text(build, encoding="utf-8")
+
 print("Applied JianxianAPP Warp 1.1.0 branding, saved MASQUE endpoint selection, QUIC handshake speed tests, and fixed default SNI.")
