@@ -121,6 +121,8 @@ k = k.replace('connectButton.text = "Connect"', 'connectButton.text = "连接"')
 k = k.replace('ipInfoText.text = "IPv4: $ipv4\\nIPv6: $ipv6"', 'ipInfoText.text = "IPv4：$ipv4\\nIPv6：$ipv6"')
 k = k.replace('ipInfoText.text = "Not registered"', 'ipInfoText.text = "尚未注册"')
 k = k.replace('endpointText.text = "Endpoint: $displayEndpoint"', 'endpointText.text = "连接节点：$displayEndpoint"')
+k = k.replace("settingsButton.isEnabled = false", "settingsButton.isEnabled = false\\n            ipListButton.isEnabled = false")
+k = k.replace("settingsButton.isEnabled = true", "settingsButton.isEnabled = true\\n            ipListButton.isEnabled = true")
 insert = r'''
     private fun savedEndpoints(): MutableList<String> {
         val raw = prefs.getString(KEY_ENDPOINTS, "") ?: ""
