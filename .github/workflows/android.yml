@@ -70,26 +70,49 @@ jobs:
           sed -i 's/minSdk = 24/minSdk = 26/' upstream/usque-android/android/usque-vpn/app/build.gradle.kts
           grep -q 'minSdk = 26' upstream/usque-android/android/usque-vpn/app/build.gradle.kts
 
-      - name: Build APK
-        working-directory: upstream/usque-android/android/usque-vpn
-        run: ./gradlew --no-daemon clean assembleDebug
-
-      - name: Verify APK and native ABIs
+      - name: Prepare release signing key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          apk="upstream/usque-android/android/usque-vpn/app/build/outputs/apk/debug/app-debug.apk"
+          set -euo pipefail
+          test -n "$ANDROID_KEYSTORE_BASE64" || { echo "Missing ANDROID_KEYSTORE_BASE64 secret"; exit 1; }
+          test -n "$ANDROID_KEYSTORE_PASSWORD" || { echo "Missing ANDROID_KEYSTORE_PASSWORD secret"; exit 1; }
+          test -n "$ANDROID_KEY_ALIAS" || { echo "Missing ANDROID_KEY_ALIAS secret"; exit 1; }
+          test -n "$ANDROID_KEY_PASSWORD" || { echo "Missing ANDROID_KEY_PASSWORD secret"; exit 1; }
+          key="$RUNNER_TEMP/hide-wifi-release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$key"
+          test -s "$key"
+          echo "ANDROID_KEYSTORE_FILE=$key" >> "$GITHUB_ENV"
+          echo "ANDROID_KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_ALIAS=$ANDROID_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_PASSWORD=$ANDROID_KEY_PASSWORD" >> "$GITHUB_ENV"
+
+      - name: Build signed release APK
+        working-directory: upstream/usque-android/android/usque-vpn
+        run: ./gradlew --no-daemon clean assembleRelease
+
+      - name: Verify signed APK and native ABIs
+        run: |
+          set -euo pipefail
+          apk="upstream/usque-android/android/usque-vpn/app/build/outputs/apk/release/app-release.apk"
           test -s "$apk"
           unzip -l "$apk" | tee apk-files.txt
           grep -q 'lib/arm64-v8a/' apk-files.txt
           grep -q 'lib/armeabi-v7a/' apk-files.txt
+          "$ANDROID_HOME/build-tools/34.0.0/zipalign" -c -v 4 "$apk"
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs "$apk"
           mkdir -p dist
-          cp "$apk" dist/WARP-MASQUE-Android-debug.apk
-          sha256sum dist/WARP-MASQUE-Android-debug.apk > dist/SHA256SUMS.txt
+          cp "$apk" dist/Hide-WiFi-v1.4.0.apk
+          sha256sum dist/Hide-WiFi-v1.4.0.apk > dist/SHA256SUMS.txt
           cat dist/SHA256SUMS.txt
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WARP-MASQUE-Android-${{ github.sha }}
+          name: Hide-WiFi-v1.4.0-${{ github.sha }}
           path: dist/*
           if-no-files-found: error
           retention-days: 30
@@ -101,7 +124,7 @@ jobs:
         run: |
           if ! gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
-              --title "WARP-MASQUE-Android $GITHUB_REF_NAME" \
-              --notes "Automated Android APK build. Android 8.0+; arm64-v8a and armeabi-v7a. This is a debug-key-signed test build."
+              --title "Hide Wi-Fi $GITHUB_REF_NAME" \
+              --notes "Signed Android release build. Android 8.0+; arm64-v8a and armeabi-v7a. See release notes for verified DNS security behavior and known limitations."
           fi
           gh release upload "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --clobber
