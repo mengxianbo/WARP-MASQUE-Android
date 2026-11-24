@@ -1,0 +1,3 @@
+[submodule "upstream/usque-android"]
+	path = upstream/usque-android
+	url = https://github.com/Abobo7/usque-android.git
