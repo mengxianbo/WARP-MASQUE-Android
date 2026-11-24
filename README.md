@@ -1,6 +1,6 @@
-# WARP-MASQUE-Android
+# JianxianAPP Warp
 
-非官方 Cloudflare WARP / MASQUE Android 客户端构建项目。
+JianxianAPP Warp：简体中文 Android 客户端，基于非官方 Cloudflare WARP / MASQUE 实现。
 
 ## 构建目标
 
