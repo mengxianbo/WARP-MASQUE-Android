@@ -11,7 +11,7 @@ def read(path):
     return (ROOT / path).read_text(encoding="utf-8")
 
 write("res/values/strings.xml", """<?xml version="1.0" encoding="utf-8"?>
-<resources><string name="app_name">Hide Wi-Fi</string><string name="app_version">版本 1.2.0</string></resources>
+<resources><string name="app_name">Hide Wi-Fi</string><string name="app_version">版本 1.3.0</string></resources>
 """)
 
 write("res/layout/activity_main.xml", """<?xml version="1.0" encoding="utf-8"?>
@@ -61,7 +61,7 @@ write("res/layout/activity_main.xml", """<?xml version="1.0" encoding="utf-8"?>
   <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
    android:text="Hide Wi-Fi · MASQUE 核心基于 usque" android:textSize="11sp" android:textColor="#6b7280" android:layout_marginTop="24dp"/>
   <TextView android:id="@+id/version_text" android:layout_width="wrap_content" android:layout_height="wrap_content"
-   android:text="版本 1.2.0" android:textSize="12sp" android:textColor="#9ca3af" android:layout_marginTop="6dp"/>
+   android:text="版本 1.3.0" android:textSize="12sp" android:textColor="#9ca3af" android:layout_marginTop="6dp"/>
   <TextView android:id="@+id/github_text" android:layout_width="wrap_content" android:layout_height="wrap_content"
    android:text="GitHub：github.com/mengxianbo" android:textSize="12sp" android:textColor="#60a5fa"
    android:clickable="true" android:focusable="true" android:layout_marginTop="6dp" android:layout_marginBottom="24dp"/>
@@ -122,7 +122,7 @@ class MainActivity : Activity() {
         private const val KEY_PROXY_USER = "proxy_user"
         private const val KEY_PROXY_PASS = "proxy_pass"
         private const val KEY_PROXY_AUTH = "proxy_auth_enabled"
-        private const val APP_VERSION = "1.2.0"
+        private const val APP_VERSION = "1.3.0"
         private const val AUTHOR_URL = "https://github.com/mengxianbo"
         private const val PROXY_PORT = 6668
     }
@@ -229,6 +229,10 @@ class MainActivity : Activity() {
         val configPath = filesDir.absolutePath + "/config.json"
         if (!Usqueandroid.isRegistered(configPath)) {
             Toast.makeText(this, "请先连接一次 WARP 完成注册，再启动共享代理", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (!UsqueVpnService.isRunning || !UsqueVpnService.isConnected) {
+            Toast.makeText(this, "请先连接 WARP VPN，避免共享代理直接使用本地网络出口", Toast.LENGTH_LONG).show()
             return
         }
         ensureProxyDefaults()
@@ -515,7 +519,7 @@ class ProxyService : Service() {
 
 manifest = read("AndroidManifest.xml")
 manifest = manifest.replace('<uses-permission android:name="android.permission.INTERNET" />',
-    '<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />')
+    '<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />')
 manifest = manifest.replace('android:icon="@drawable/ic_vpn"', 'android:icon="@drawable/ic_compass"')
 if 'android:name=".ProxyService"' not in manifest:
     manifest = manifest.replace('        <!-- VPN Service -->', '''        <service android:name=".ProxyService" android:exported="false" android:foregroundServiceType="specialUse">
@@ -526,8 +530,8 @@ if 'android:name=".ProxyService"' not in manifest:
 write("AndroidManifest.xml", manifest)
 
 gradle = ROOT.parents[2] / "app/build.gradle.kts"
-build = gradle.read_text(encoding="utf-8").replace("versionCode = 5", "versionCode = 6")
-build = build.replace('versionName = "1.1.0"', 'versionName = "1.2.0"')
+build = gradle.read_text(encoding="utf-8").replace("versionCode = 5", "versionCode = 7")
+build = build.replace('versionName = "1.1.0"', 'versionName = "1.3.0"')
 gradle.write_text(build, encoding="utf-8")
 
 print("Hide Wi-Fi HTTP proxy customization applied.")
