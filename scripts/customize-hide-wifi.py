@@ -552,6 +552,24 @@ class ProxyService : Service() {
 }
 ''')
 
+
+# Use a dedicated monochrome status-bar icon for the active VPN foreground service.
+write("res/drawable/ic_status_lightning.xml", """<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M13.2,1.8 L4.6,13.2 L10.7,13.2 L9.6,22.2 L19.4,9.1 L13.1,9.1 Z" />
+</vector>
+""")
+vpn_service = read("kotlin/com/abobo/usquevpn/UsqueVpnService.kt")
+vpn_service = vpn_service.replace(
+    ".setSmallIcon(R.drawable.ic_vpn)",
+    ".setSmallIcon(R.drawable.ic_status_lightning)"
+)
+write("kotlin/com/abobo/usquevpn/UsqueVpnService.kt", vpn_service)
+
+
 manifest = read("AndroidManifest.xml")
 manifest = manifest.replace('<uses-permission android:name="android.permission.INTERNET" />',
     '<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />\n    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />')
@@ -567,6 +585,26 @@ write("AndroidManifest.xml", manifest)
 gradle = ROOT.parents[2] / "app/build.gradle.kts"
 build = gradle.read_text(encoding="utf-8").replace("versionCode = 7", "versionCode = 8")
 build = build.replace('versionName = "1.3.0"', 'versionName = "1.4.0"')
+if 'signingConfigs {' not in build:
+    build = build.replace('    buildTypes {', """    val releaseStoreFile = System.getenv("ANDROID_KEYSTORE_FILE")
+    val releaseStorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+    val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
+    val releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+
+    signingConfigs {
+        create("release") {
+            if (!releaseStoreFile.isNullOrBlank()) storeFile = file(releaseStoreFile)
+            if (!releaseStorePassword.isNullOrBlank()) storePassword = releaseStorePassword
+            if (!releaseKeyAlias.isNullOrBlank()) keyAlias = releaseKeyAlias
+            if (!releaseKeyPassword.isNullOrBlank()) keyPassword = releaseKeyPassword
+        }
+    }
+
+    buildTypes {""")
+    build = build.replace('''        release {
+            isMinifyEnabled = true''', '''        release {
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = true''')
 gradle.write_text(build, encoding="utf-8")
 
 print("Hide Wi-Fi HTTP proxy customization applied.")
