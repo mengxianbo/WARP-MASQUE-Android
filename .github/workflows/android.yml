@@ -2,7 +2,7 @@ name: Android APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/http-lan-proxy-auth]
     tags: ["v*"]
   pull_request:
     branches: [main]
@@ -54,7 +54,7 @@ jobs:
       - name: Apply JianxianAPP Warp branding and UI customizations
         run: python3 scripts/customize-upstream.py
 
-      - name: Apply Hide Wi-Fi branding and LAN SOCKS5 proxy
+      - name: Apply Hide Wi-Fi branding and authenticated LAN HTTP proxy
         run: python3 scripts/customize-hide-wifi.py
 
       - name: Build Go Android AAR for both ABIs

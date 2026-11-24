@@ -25,6 +25,14 @@ JianxianAPP Warp：简体中文 Android 客户端，基于非官方 Cloudflare W
 
 请勿分享 `config.json`，其中包含设备密钥和账户凭据。
 
+## Hide Wi-Fi 局域网 HTTP 代理
+
+- 先连接应用内的 WARP VPN，再启动 HTTP 代理；默认监听 TCP 端口 `6668`。
+- 账号和密码可在应用内手动编辑；认证默认开启，也可在可信局域网内按需关闭。
+- 其他设备需手动将 HTTP 代理设置为手机的局域网 IP 和端口 `6668`。普通无 Root Android 不保证自动透明接管热点客户端流量。
+- 代理仅允许回环、私有网段和链路本地地址作为客户端来源，不面向公网开放。
+- 代理支持 HTTP 请求与 HTTPS CONNECT（TCP）；不转发 UDP / QUIC，不能单靠此代理防止 WebRTC 泄漏。需要完整 UDP 防绕过时，客户端设备应使用自己的 VPN/TUN。
+
 ## 源码与上游
 
 Android 应用与 Go MASQUE 核心通过 Git submodule 引入：
