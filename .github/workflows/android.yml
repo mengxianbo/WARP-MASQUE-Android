@@ -2,7 +2,7 @@ name: Android APK
 
 on:
   push:
-    branches: [main, feature/http-lan-proxy-auth]
+    branches: [main, feature/http-lan-proxy-auth, feature/doh-fail-closed-release]
     tags: ["v*"]
   pull_request:
     branches: [main]
