@@ -93,7 +93,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/* \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "WARP-MASQUE-Android $GITHUB_REF_NAME" \
-            --notes "Automated Android APK build. Android 8.0+; arm64-v8a and armeabi-v7a. This is a debug-key-signed test build."
+          if ! gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --title "WARP-MASQUE-Android $GITHUB_REF_NAME" \
+              --notes "Automated Android APK build. Android 8.0+; arm64-v8a and armeabi-v7a. This is a debug-key-signed test build."
+          fi
+          gh release upload "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --clobber
