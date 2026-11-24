@@ -323,7 +323,7 @@ class MainActivity : Activity() {
 '''
 write("kotlin/com/abobo/usquevpn/MainActivity.kt", kotlin)
 
-go = ROOT.parents[4] / "usque_android.go"
+go = ROOT.parents[3] / "usque_android.go"
 source = go.read_text(encoding="utf-8")
 source = source.replace('customSNI      = "www.visa.cn" // Default SNI for censorship circumvention.', 'customSNI      = "" // Empty selects the Cloudflare MASQUE default SNI.')
 source = source.replace('customSNI = "www.visa.cn"', 'customSNI = ""')
