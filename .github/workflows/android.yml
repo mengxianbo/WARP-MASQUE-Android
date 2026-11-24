@@ -51,6 +51,9 @@ jobs:
           test "$actual" = "$expected"
           echo "Building upstream commit $actual"
 
+      - name: Apply JianxianAPP Warp branding and UI customizations
+        run: python3 scripts/customize-upstream.py
+
       - name: Build Go Android AAR for both ABIs
         working-directory: upstream/usque-android/android
         run: |
