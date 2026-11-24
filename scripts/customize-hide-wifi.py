@@ -11,7 +11,7 @@ def read(path):
     return (ROOT / path).read_text(encoding="utf-8")
 
 write("res/values/strings.xml", """<?xml version="1.0" encoding="utf-8"?>
-<resources><string name="app_name">Hide Wi-Fi</string><string name="app_version">版本 1.3.0</string></resources>
+<resources><string name="app_name">Hide Wi-Fi</string><string name="app_version">版本 1.4.0</string></resources>
 """)
 
 write("res/layout/activity_main.xml", """<?xml version="1.0" encoding="utf-8"?>
@@ -54,17 +54,10 @@ write("res/layout/activity_main.xml", """<?xml version="1.0" encoding="utf-8"?>
    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
     android:text="HTTP 代理支持 HTTP 和 HTTPS CONNECT（TCP）。可手动设置账号密码，也可关闭认证；仅允许本地局域网地址连接。"
     android:textColor="#9ca3af" android:textSize="11sp" android:layout_marginTop="8dp"/>
-   <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-    android:text="WebRTC 提醒：HTTP 代理不转发 UDP / QUIC，不能单独防止 WebRTC 泄漏；需在客户端设备启用 VPN 或禁用 WebRTC / QUIC。"
-    android:textColor="#fbbf24" android:textSize="11sp" android:layout_marginTop="7dp"/>
   </LinearLayout>
-  <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-   android:text="Hide Wi-Fi · MASQUE 核心基于 usque" android:textSize="11sp" android:textColor="#6b7280" android:layout_marginTop="24dp"/>
-  <TextView android:id="@+id/version_text" android:layout_width="wrap_content" android:layout_height="wrap_content"
-   android:text="版本 1.3.0" android:textSize="12sp" android:textColor="#9ca3af" android:layout_marginTop="6dp"/>
-  <TextView android:id="@+id/github_text" android:layout_width="wrap_content" android:layout_height="wrap_content"
-   android:text="GitHub：github.com/mengxianbo" android:textSize="12sp" android:textColor="#60a5fa"
-   android:clickable="true" android:focusable="true" android:layout_marginTop="6dp" android:layout_marginBottom="24dp"/>
+  <Button android:id="@+id/menu_button" android:layout_width="match_parent" android:layout_height="48dp"
+   android:text="菜单" android:textColor="#ffffff"
+   android:background="@drawable/button_secondary_background" android:layout_marginTop="18dp" android:layout_marginBottom="24dp"/>
  </LinearLayout>
 </ScrollView>
 """)
@@ -96,7 +89,8 @@ import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.net.VpnService
-import android.net.wifi.WifiManager
+import android.os.PowerManager
+import android.provider.Settings
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -122,7 +116,7 @@ class MainActivity : Activity() {
         private const val KEY_PROXY_USER = "proxy_user"
         private const val KEY_PROXY_PASS = "proxy_pass"
         private const val KEY_PROXY_AUTH = "proxy_auth_enabled"
-        private const val APP_VERSION = "1.3.0"
+        private const val APP_VERSION = "1.4.0"
         private const val AUTHOR_URL = "https://github.com/mengxianbo"
         private const val PROXY_PORT = 6668
     }
@@ -134,8 +128,7 @@ class MainActivity : Activity() {
     private lateinit var proxyButton: Button
     private lateinit var proxySettingsButton: Button
     private lateinit var proxyInfoText: TextView
-    private lateinit var versionText: TextView
-    private lateinit var githubText: TextView
+    private lateinit var menuButton: Button
     private var registeredEndpoint = ""
     private val uiHandler = Handler(Looper.getMainLooper())
     private val refreshUi = object : Runnable {
@@ -156,12 +149,10 @@ class MainActivity : Activity() {
         proxyButton = findViewById(R.id.proxy_button)
         proxySettingsButton = findViewById(R.id.proxy_settings_button)
         proxyInfoText = findViewById(R.id.proxy_info_text)
-        versionText = findViewById(R.id.version_text)
-        githubText = findViewById(R.id.github_text)
+        menuButton = findViewById(R.id.menu_button)
         Usqueandroid.setSNI("")
         Usqueandroid.setEndpoint(prefs.getString(KEY_SELECTED_ENDPOINT, "") ?: "")
-        versionText.text = "版本 " + APP_VERSION
-        githubText.setOnClickListener { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AUTHOR_URL))) }
+        menuButton.setOnClickListener { showAppMenu() }
         proxyInfoText.setOnClickListener { copyProxyInfo() }
         requestNotificationPermissionIfNeeded()
         connectButton.setOnClickListener { if (UsqueVpnService.isRunning) stopVpn() else startVpn() }
@@ -185,6 +176,47 @@ class MainActivity : Activity() {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIFICATION_REQUEST_CODE)
         }
     }
+    private fun showAppMenu() {
+        AlertDialog.Builder(this).setTitle("Hide Wi-Fi 菜单")
+            .setItems(arrayOf("后台保护", "关于")) { _, which ->
+                if (which == 0) showBackgroundProtection() else showAbout()
+            }.show()
+    }
+    private fun showAbout() {
+        AlertDialog.Builder(this).setTitle("关于 Hide Wi-Fi")
+            .setMessage("Hide Wi-Fi · Cloudflare WARP / MASQUE\n版本：$APP_VERSION\n作者：mengxianbo\n基于 usque 开源项目")
+            .setPositiveButton("访问作者 GitHub") { _, _ ->
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AUTHOR_URL)))
+            }.setNegativeButton("关闭", null).show()
+    }
+    private fun showBackgroundProtection() {
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        val exempt = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || pm.isIgnoringBatteryOptimizations(packageName)
+        val message = if (exempt) {
+            "已允许忽略电池优化。请同时在系统设置中允许 Hide Wi-Fi 自启动、后台运行，并在支持的设备上锁定最近任务。\n\nAndroid 和厂商系统仍可能因用户强制停止或其他系统策略终止应用。"
+        } else {
+            "申请忽略电池优化，可降低系统休眠或省电策略停止 WARP / 代理服务的概率。建议同时在系统设置中允许自启动和后台运行。此功能不能阻止用户强制停止或厂商系统的所有清理行为。"
+        }
+        val builder = AlertDialog.Builder(this).setTitle("后台保护").setMessage(message)
+            .setNegativeButton("关闭", null)
+        if (!exempt && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            builder.setPositiveButton("开启后台保护") { _, _ ->
+                try {
+                    startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                        .setData(Uri.parse("package:$packageName")))
+                } catch (_: Exception) {
+                    try { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+                    catch (_: Exception) { Toast.makeText(this, "请在系统设置中手动关闭电池优化", Toast.LENGTH_LONG).show() }
+                }
+            }
+        } else {
+            builder.setPositiveButton("电池优化设置") { _, _ ->
+                try { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } catch (_: Exception) {}
+            }
+        }
+        builder.show()
+    }
+
     private fun ensureProxyDefaults() {
         if (!prefs.contains(KEY_PROXY_AUTH)) prefs.edit().putBoolean(KEY_PROXY_AUTH, true).apply()
         if (!prefs.contains(KEY_PROXY_USER)) prefs.edit().putString(KEY_PROXY_USER, "").apply()
@@ -522,7 +554,8 @@ class ProxyService : Service() {
 
 manifest = read("AndroidManifest.xml")
 manifest = manifest.replace('<uses-permission android:name="android.permission.INTERNET" />',
-    '<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />')
+    '<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />\n    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />')
 manifest = manifest.replace('android:icon="@drawable/ic_vpn"', 'android:icon="@drawable/ic_compass"')
 if 'android:name=".ProxyService"' not in manifest:
     manifest = manifest.replace('        <!-- VPN Service -->', '''        <service android:name=".ProxyService" android:exported="false" android:foregroundServiceType="specialUse">
@@ -533,8 +566,8 @@ if 'android:name=".ProxyService"' not in manifest:
 write("AndroidManifest.xml", manifest)
 
 gradle = ROOT.parents[2] / "app/build.gradle.kts"
-build = gradle.read_text(encoding="utf-8").replace("versionCode = 5", "versionCode = 7")
-build = build.replace('versionName = "1.1.0"', 'versionName = "1.3.0"')
+build = gradle.read_text(encoding="utf-8").replace("versionCode = 7", "versionCode = 8")
+build = build.replace('versionName = "1.3.0"', 'versionName = "1.4.0"')
 gradle.write_text(build, encoding="utf-8")
 
 print("Hide Wi-Fi HTTP proxy customization applied.")
