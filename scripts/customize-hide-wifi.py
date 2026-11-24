@@ -567,6 +567,26 @@ write("AndroidManifest.xml", manifest)
 gradle = ROOT.parents[2] / "app/build.gradle.kts"
 build = gradle.read_text(encoding="utf-8").replace("versionCode = 7", "versionCode = 8")
 build = build.replace('versionName = "1.3.0"', 'versionName = "1.4.0"')
+if 'signingConfigs {' not in build:
+    build = build.replace('    buildTypes {', """    val releaseStoreFile = System.getenv("ANDROID_KEYSTORE_FILE")
+    val releaseStorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+    val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
+    val releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+
+    signingConfigs {
+        create("release") {
+            if (!releaseStoreFile.isNullOrBlank()) storeFile = file(releaseStoreFile)
+            if (!releaseStorePassword.isNullOrBlank()) storePassword = releaseStorePassword
+            if (!releaseKeyAlias.isNullOrBlank()) keyAlias = releaseKeyAlias
+            if (!releaseKeyPassword.isNullOrBlank()) keyPassword = releaseKeyPassword
+        }
+    }
+
+    buildTypes {""")
+    build = build.replace('''        release {
+            isMinifyEnabled = true''', '''        release {
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = true''')
 gradle.write_text(build, encoding="utf-8")
 
 print("Hide Wi-Fi HTTP proxy customization applied.")
