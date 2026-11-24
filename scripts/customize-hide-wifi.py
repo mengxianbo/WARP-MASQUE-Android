@@ -215,7 +215,7 @@ class MainActivity : Activity() {
                     Toast.makeText(this, "开启认证时用户名和密码不能为空", Toast.LENGTH_LONG).show()
                     return@setPositiveButton
                 }
-                if (u.contains(":") || u.contains("\\r") || u.contains("\\n") || p.contains("\\r") || p.contains("\\n")) {
+                if (u.contains(":") || u.contains("\r") || u.contains("\n") || p.contains("\r") || p.contains("\n")) {
                     Toast.makeText(this, "用户名或密码包含不支持的字符", Toast.LENGTH_LONG).show()
                     return@setPositiveButton
                 }
@@ -463,7 +463,7 @@ class ProxyService : Service() {
                     if (uri == null || uri.scheme != "http") { respond(output, "400 Bad Request"); return }
                     val path = (uri.rawPath.ifEmpty { "/" }) + (if (uri.rawQuery != null) "?" + uri.rawQuery else "")
                     val req = StringBuilder().append(method).append(" ").append(path).append(" ").append(parts[2]).append("\r\n")
-                    lines.drop(1).filter { it.isNotBlank() && !it.startsWith("Proxy-Authorization:", true) && !it.startsWith("Proxy-Connection:", true) }
+                    lines.drop(1).filter { it.isNotBlank() && !it.startsWith("Proxy-Authorization:", true) && !it.startsWith("Proxy-Connection:", true) && !it.startsWith("Connection:", true) }
                         .forEach { req.append(it).append("\r\n") }
                     req.append("Connection: close\r\n\r\n")
                     remote.getOutputStream().write(req.toString().toByteArray(Charsets.ISO_8859_1))
