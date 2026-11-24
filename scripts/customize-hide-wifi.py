@@ -447,7 +447,7 @@ class ProxyService : Service() {
             val target = parts[1]
             val authLine = lines.firstOrNull { it.startsWith("Proxy-Authorization:", true) }
             if (auth && !checkAuth(authLine?.substringAfter(":")?.trim(), user, pass)) {
-                output.write("HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=Hide-Wi-Fi\\r\\nConnection: close\r\nContent-Length: 0\r\n\r\n".toByteArray(Charsets.ISO_8859_1))
+                output.write("HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=Hide-Wi-Fi\r\nConnection: close\r\nContent-Length: 0\r\n\r\n".toByteArray(Charsets.ISO_8859_1))
                 output.flush(); return
             }
             val uri = if (method == "CONNECT") null else try { java.net.URI(target) } catch (_: Exception) { null }
