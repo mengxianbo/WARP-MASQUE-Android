@@ -220,7 +220,7 @@ class MainActivity : Activity() {
                     return@setPositiveButton
                 }
                 prefs.edit().putBoolean(KEY_PROXY_AUTH, auth.isChecked).putString(KEY_PROXY_USER, u).putString(KEY_PROXY_PASS, p).apply()
-                if (ProxyService.isRunning) { stopProxy(); startProxy() }
+                if (ProxyService.isRunning) stopProxy()
                 Toast.makeText(this, "代理设置已保存", Toast.LENGTH_SHORT).show()
                 updateUI()
             }.show()
@@ -428,39 +428,39 @@ class ProxyService : Service() {
                 if (state == 4) break
             }
             if (state != 4) { respond(output, "431 Request Header Fields Too Large"); return }
-            val lines = String(header.toByteArray(), Charsets.ISO_8859_1).split("\\r\\n")
+            val lines = String(header.toByteArray(), Charsets.ISO_8859_1).split("\r\n")
             val parts = lines.firstOrNull()?.split(" ") ?: emptyList()
             if (parts.size < 3) { respond(output, "400 Bad Request"); return }
             val method = parts[0].uppercase()
             val target = parts[1]
             val authLine = lines.firstOrNull { it.startsWith("Proxy-Authorization:", true) }
             if (auth && !checkAuth(authLine?.substringAfter(":")?.trim(), user, pass)) {
-                output.write("HTTP/1.1 407 Proxy Authentication Required\\r\\nProxy-Authenticate: Basic realm=\\"Hide Wi-Fi\\"\\r\\nConnection: close\\r\\nContent-Length: 0\\r\\n\\r\\n".toByteArray(Charsets.ISO_8859_1))
+                output.write("HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\\"Hide Wi-Fi\\"\r\nConnection: close\r\nContent-Length: 0\r\n\r\n".toByteArray(Charsets.ISO_8859_1))
                 output.flush(); return
             }
             val uri = if (method == "CONNECT") null else try { java.net.URI(target) } catch (_: Exception) { null }
             val host = if (method == "CONNECT") target.substringBeforeLast(":").removePrefix("[").removeSuffix("]")
                 else uri?.host
             val port = if (method == "CONNECT") target.substringAfterLast(":", "443").toIntOrNull() ?: 443
-                else if (uri?.port ?: -1 > 0) uri!!.port else 80
+                else if ((uri?.port ?: -1) > 0) uri!!.port else 80
             if (host.isNullOrBlank() || port !in 1..65535) { respond(output, "400 Bad Request"); return }
             val upstream = try { Socket(host, port).apply { soTimeout = 30000 } }
                 catch (_: Exception) { respond(output, "502 Bad Gateway"); return }
             upstream.use { remote ->
                 if (method == "CONNECT") {
-                    output.write("HTTP/1.1 200 Connection Established\\r\\n\\r\\n".toByteArray(Charsets.ISO_8859_1))
+                    output.write("HTTP/1.1 200 Connection Established\r\n\r\n".toByteArray(Charsets.ISO_8859_1))
                     output.flush()
                     socket.soTimeout = 0; remote.soTimeout = 0
                     val a = Thread { copyStream(input, remote.getOutputStream()) }
                     val b = Thread { copyStream(remote.getInputStream(), output) }
-                    a.start(); b.start(); a.join(); b.join()
+                    a.start(); b.join(30000); try { socket.close(); remote.close() } catch (_: Exception) {}; a.join(1000)
                 } else {
                     if (uri == null || uri.scheme != "http") { respond(output, "400 Bad Request"); return }
                     val path = (uri.rawPath.ifEmpty { "/" }) + (if (uri.rawQuery != null) "?" + uri.rawQuery else "")
-                    val req = StringBuilder().append(method).append(" ").append(path).append(" ").append(parts[2]).append("\\r\\n")
+                    val req = StringBuilder().append(method).append(" ").append(path).append(" ").append(parts[2]).append("\r\n")
                     lines.drop(1).filter { it.isNotBlank() && !it.startsWith("Proxy-Authorization:", true) && !it.startsWith("Proxy-Connection:", true) }
-                        .forEach { req.append(it).append("\\r\\n") }
-                    req.append("Connection: close\\r\\n\\r\\n")
+                        .forEach { req.append(it).append("\r\n") }
+                    req.append("Connection: close\r\n\r\n")
                     remote.getOutputStream().write(req.toString().toByteArray(Charsets.ISO_8859_1))
                     remote.getOutputStream().flush()
                     input.copyTo(remote.getOutputStream()); remote.getOutputStream().flush()
@@ -478,7 +478,7 @@ class ProxyService : Service() {
     }
 
     private fun respond(out: BufferedOutputStream, status: String) {
-        out.write(("HTTP/1.1 " + status + "\\r\\nConnection: close\\r\\nContent-Length: 0\\r\\n\\r\\n").toByteArray(Charsets.ISO_8859_1))
+        out.write(("HTTP/1.1 " + status + "\r\nConnection: close\r\nContent-Length: 0\r\n\r\n").toByteArray(Charsets.ISO_8859_1))
         out.flush()
     }
 
