@@ -45,14 +45,17 @@ write("res/layout/activity_main.xml", """<?xml version="1.0" encoding="utf-8"?>
    <TextView android:id="@+id/proxy_info_text" android:layout_width="match_parent" android:layout_height="wrap_content"
     android:text="代理未启动。启动后点击此处可复制连接信息。" android:textColor="#d1d5db" android:textSize="13sp"
     android:layout_marginTop="10dp" android:clickable="true" android:focusable="true"/>
-   <Button android:id="@+id/proxy_button" android:layout_width="match_parent" android:layout_height="50dp"
-    android:text="启动 SOCKS5 代理（端口 6668）" android:textColor="#ffffff"
+   <Button android:id="@+id/proxy_settings_button" android:layout_width="match_parent" android:layout_height="48dp"
+    android:text="设置 HTTP 代理账号 / 密码" android:textColor="#ffffff"
     android:background="@drawable/button_secondary_background" android:layout_marginTop="12dp"/>
+   <Button android:id="@+id/proxy_button" android:layout_width="match_parent" android:layout_height="50dp"
+    android:text="启动 HTTP 代理（端口 6668）" android:textColor="#ffffff"
+    android:background="@drawable/button_secondary_background" android:layout_marginTop="8dp"/>
    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-    android:text="SOCKS5（TCP）· 强制用户名和密码认证。目标域名经 Cloudflare MASQUE 远端解析，不在手机本地查询。"
+    android:text="HTTP 代理支持 HTTP 和 HTTPS CONNECT（TCP）。可手动设置账号密码，也可关闭认证；仅允许本地局域网地址连接。"
     android:textColor="#9ca3af" android:textSize="11sp" android:layout_marginTop="8dp"/>
    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-    android:text="WebRTC 提醒：此共享代理不转发 UDP，其他设备需在浏览器禁用 WebRTC，或在该设备启用 VPN。"
+    android:text="WebRTC 提醒：HTTP 代理不转发 UDP / QUIC，不能单独防止 WebRTC 泄漏；需在客户端设备启用 VPN 或禁用 WebRTC / QUIC。"
     android:textColor="#fbbf24" android:textSize="11sp" android:layout_marginTop="7dp"/>
   </LinearLayout>
   <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
@@ -100,7 +103,11 @@ import android.os.Handler
 import android.os.Looper
 import android.text.format.Formatter
 import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.TextView
+import android.text.InputType
+import android.app.AlertDialog
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import usqueandroid.Usqueandroid
@@ -114,6 +121,7 @@ class MainActivity : Activity() {
         private const val KEY_SELECTED_ENDPOINT = "selected_endpoint"
         private const val KEY_PROXY_USER = "proxy_user"
         private const val KEY_PROXY_PASS = "proxy_pass"
+        private const val KEY_PROXY_AUTH = "proxy_auth_enabled"
         private const val APP_VERSION = "1.2.0"
         private const val AUTHOR_URL = "https://github.com/mengxianbo"
         private const val PROXY_PORT = 6668
@@ -124,6 +132,7 @@ class MainActivity : Activity() {
     private lateinit var ipInfoText: TextView
     private lateinit var endpointText: TextView
     private lateinit var proxyButton: Button
+    private lateinit var proxySettingsButton: Button
     private lateinit var proxyInfoText: TextView
     private lateinit var versionText: TextView
     private lateinit var githubText: TextView
@@ -145,6 +154,7 @@ class MainActivity : Activity() {
         ipInfoText = findViewById(R.id.ip_info_text)
         endpointText = findViewById(R.id.endpoint_text)
         proxyButton = findViewById(R.id.proxy_button)
+        proxySettingsButton = findViewById(R.id.proxy_settings_button)
         proxyInfoText = findViewById(R.id.proxy_info_text)
         versionText = findViewById(R.id.version_text)
         githubText = findViewById(R.id.github_text)
@@ -156,6 +166,7 @@ class MainActivity : Activity() {
         requestNotificationPermissionIfNeeded()
         connectButton.setOnClickListener { if (UsqueVpnService.isRunning) stopVpn() else startVpn() }
         proxyButton.setOnClickListener { if (ProxyService.isRunning) stopProxy() else startProxy() }
+        proxySettingsButton.setOnClickListener { showProxySettings() }
         updateUI()
     }
 
@@ -174,13 +185,45 @@ class MainActivity : Activity() {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIFICATION_REQUEST_CODE)
         }
     }
-    private fun ensureProxyCredentials() {
-        if (prefs.getString(KEY_PROXY_USER, null) == null || prefs.getString(KEY_PROXY_PASS, null) == null) {
-            val alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
-            val random = SecureRandom()
-            val password = buildString { repeat(20) { append(alphabet[random.nextInt(alphabet.length)]) } }
-            prefs.edit().putString(KEY_PROXY_USER, "hidewifi").putString(KEY_PROXY_PASS, password).apply()
+    private fun ensureProxyDefaults() {
+        if (!prefs.contains(KEY_PROXY_AUTH)) prefs.edit().putBoolean(KEY_PROXY_AUTH, true).apply()
+        if (!prefs.contains(KEY_PROXY_USER)) prefs.edit().putString(KEY_PROXY_USER, "").apply()
+        if (!prefs.contains(KEY_PROXY_PASS)) prefs.edit().putString(KEY_PROXY_PASS, "").apply()
+    }
+
+    private fun showProxySettings() {
+        ensureProxyDefaults()
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(48, 20, 48, 8) }
+        val auth = android.widget.CheckBox(this).apply {
+            text = "启用用户名和密码认证（建议开启）"
+            isChecked = prefs.getBoolean(KEY_PROXY_AUTH, true)
         }
+        val user = EditText(this).apply { hint = "代理用户名"; setSingleLine(true); setText(prefs.getString(KEY_PROXY_USER, "")) }
+        val pass = EditText(this).apply {
+            hint = "代理密码"; setSingleLine(true)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setText(prefs.getString(KEY_PROXY_PASS, ""))
+        }
+        box.addView(auth); box.addView(user); box.addView(pass)
+        AlertDialog.Builder(this).setTitle("HTTP 代理设置")
+            .setMessage("端口固定为 6668。关闭认证后，同一局域网内的设备无需账号密码。")
+            .setView(box).setNegativeButton("取消", null)
+            .setPositiveButton("保存") { _, _ ->
+                val u = user.text.toString().trim()
+                val p = pass.text.toString()
+                if (auth.isChecked && (u.isBlank() || p.isBlank())) {
+                    Toast.makeText(this, "开启认证时用户名和密码不能为空", Toast.LENGTH_LONG).show()
+                    return@setPositiveButton
+                }
+                if (u.contains(":") || u.contains("\\r") || u.contains("\\n") || p.contains("\\r") || p.contains("\\n")) {
+                    Toast.makeText(this, "用户名或密码包含不支持的字符", Toast.LENGTH_LONG).show()
+                    return@setPositiveButton
+                }
+                prefs.edit().putBoolean(KEY_PROXY_AUTH, auth.isChecked).putString(KEY_PROXY_USER, u).putString(KEY_PROXY_PASS, p).apply()
+                if (ProxyService.isRunning) { stopProxy(); startProxy() }
+                Toast.makeText(this, "代理设置已保存", Toast.LENGTH_SHORT).show()
+                updateUI()
+            }.show()
     }
     private fun startProxy() {
         val configPath = filesDir.absolutePath + "/config.json"
@@ -188,10 +231,19 @@ class MainActivity : Activity() {
             Toast.makeText(this, "请先连接一次 WARP 完成注册，再启动共享代理", Toast.LENGTH_LONG).show()
             return
         }
-        ensureProxyCredentials()
+        ensureProxyDefaults()
+        val auth = prefs.getBoolean(KEY_PROXY_AUTH, true)
+        val user = prefs.getString(KEY_PROXY_USER, "") ?: ""
+        val pass = prefs.getString(KEY_PROXY_PASS, "") ?: ""
+        if (auth && (user.isBlank() || pass.isBlank())) {
+            Toast.makeText(this, "请先在代理设置中填写用户名和密码", Toast.LENGTH_LONG).show()
+            showProxySettings()
+            return
+        }
         val intent = Intent(this, ProxyService::class.java)
-        intent.putExtra(ProxyService.EXTRA_USERNAME, prefs.getString(KEY_PROXY_USER, "hidewifi"))
-        intent.putExtra(ProxyService.EXTRA_PASSWORD, prefs.getString(KEY_PROXY_PASS, ""))
+        intent.putExtra(ProxyService.EXTRA_AUTH, auth)
+        intent.putExtra(ProxyService.EXTRA_USERNAME, user)
+        intent.putExtra(ProxyService.EXTRA_PASSWORD, pass)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ContextCompat.startForegroundService(this, intent) else startService(intent)
     }
     private fun stopProxy() {
@@ -202,12 +254,13 @@ class MainActivity : Activity() {
             Toast.makeText(this, "请先启动代理", Toast.LENGTH_SHORT).show()
             return
         }
-        ensureProxyCredentials()
-        val info = "SOCKS5 " + getWifiIpAddress() + ":" + PROXY_PORT +
-            "\n用户名：" + prefs.getString(KEY_PROXY_USER, "hidewifi") +
-            "\n密码：" + prefs.getString(KEY_PROXY_PASS, "")
+        ensureProxyDefaults()
+        val auth = prefs.getBoolean(KEY_PROXY_AUTH, true)
+        val info = "HTTP " + getWifiIpAddress() + ":" + PROXY_PORT +
+            if (auth) "\n用户名：" + prefs.getString(KEY_PROXY_USER, "") + "\n密码：" + prefs.getString(KEY_PROXY_PASS, "")
+            else "\n无需认证"
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText("Hide Wi-Fi SOCKS5", info))
+        clipboard.setPrimaryClip(ClipData.newPlainText("Hide Wi-Fi HTTP Proxy", info))
         Toast.makeText(this, "代理连接信息已复制", Toast.LENGTH_SHORT).show()
     }
     private fun getWifiIpAddress(): String {
@@ -255,15 +308,17 @@ class MainActivity : Activity() {
         } else if (!UsqueVpnService.isRunning) ipInfoText.text = "尚未注册"
         val selected = prefs.getString(KEY_SELECTED_ENDPOINT, "") ?: ""
         endpointText.text = "连接节点：" + selected.ifEmpty { registeredEndpoint.ifEmpty { "注册后自动获取" } }
+        ensureProxyDefaults()
+        val authEnabled = prefs.getBoolean(KEY_PROXY_AUTH, true)
+        proxySettingsButton.text = if (authEnabled) "HTTP 代理账号 / 密码设置（认证开启）" else "HTTP 代理账号 / 密码设置（认证关闭）"
         if (ProxyService.isRunning) {
-            ensureProxyCredentials()
-            proxyButton.text = "停止 SOCKS5 代理"
-            proxyInfoText.text = "SOCKS5 地址：" + getWifiIpAddress() + ":" + PROXY_PORT +
-                "\n用户名：" + prefs.getString(KEY_PROXY_USER, "hidewifi") +
-                "\n密码：" + prefs.getString(KEY_PROXY_PASS, "") + "\n\n点击复制连接信息"
+            proxyButton.text = "停止 HTTP 代理"
+            proxyInfoText.text = "HTTP 地址：" + getWifiIpAddress() + ":" + PROXY_PORT +
+                if (authEnabled) "\n认证：已开启\n用户名：" + prefs.getString(KEY_PROXY_USER, "") + "\n密码：••••••••\n\n点击复制连接信息"
+                else "\n认证：已关闭\n无需账号密码\n\n点击复制连接信息"
         } else {
-            proxyButton.text = "启动 SOCKS5 代理（端口 6668）"
-            proxyInfoText.text = "代理未启动。启动后点击此处可复制连接信息。"
+            proxyButton.text = "启动 HTTP 代理（端口 6668）"
+            proxyInfoText.text = "代理未启动。可先设置账号密码，再启动代理。"
         }
     }
 }
@@ -279,58 +334,166 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import android.widget.Toast
 import androidx.core.app.NotificationCompat
-import usqueandroid.Usqueandroid
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
+import java.net.InetAddress
+import java.net.ServerSocket
+import java.net.Socket
+import java.util.Base64
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 class ProxyService : Service() {
     companion object {
         const val ACTION_STOP = "com.abobo.usquevpn.PROXY_STOP"
         const val EXTRA_USERNAME = "proxy_username"
         const val EXTRA_PASSWORD = "proxy_password"
+        const val EXTRA_AUTH = "proxy_auth"
         private const val CHANNEL_ID = "hide_wifi_proxy"
         private const val NOTIFICATION_ID = 1002
         @Volatile var isRunning = false
             private set
     }
+    private val running = AtomicBoolean(false)
+    private val workers = Executors.newCachedThreadPool()
+    private var server: ServerSocket? = null
+
     override fun onCreate() {
         super.onCreate()
-        val channel = NotificationChannel(CHANNEL_ID, "Hide Wi-Fi 代理", NotificationManager.IMPORTANCE_LOW)
+        val channel = NotificationChannel(CHANNEL_ID, "Hide Wi-Fi HTTP 代理", NotificationManager.IMPORTANCE_LOW)
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            Usqueandroid.stopSocksProxy()
-            isRunning = false
-            stopForeground(true)
-            stopSelf()
+            stopProxy(); stopForeground(true); stopSelf()
             return START_NOT_STICKY
         }
         val launch = packageManager.getLaunchIntentForPackage(packageName)
         val pending = if (launch == null) null else PendingIntent.getActivity(this, 0, launch,
             PendingIntent.FLAG_UPDATE_CURRENT or if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_compass).setContentTitle("Hide Wi-Fi SOCKS5")
-            .setContentText("局域网代理监听端口 6668").setOngoing(true)
+            .setSmallIcon(R.drawable.ic_compass).setContentTitle("Hide Wi-Fi HTTP 代理")
+            .setContentText("局域网 HTTP 代理监听端口 6668").setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE).setContentIntent(pending).build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         else startForeground(NOTIFICATION_ID, notification)
-        val user = intent?.getStringExtra(EXTRA_USERNAME) ?: "hidewifi"
+        if (running.get()) return START_NOT_STICKY
+        val auth = intent?.getBooleanExtra(EXTRA_AUTH, true) ?: true
+        val user = intent?.getStringExtra(EXTRA_USERNAME) ?: ""
         val pass = intent?.getStringExtra(EXTRA_PASSWORD) ?: ""
-        val err = Usqueandroid.startSocksProxy(filesDir.absolutePath + "/config.json", "0.0.0.0", 6668, user, pass)
-        if (err.isNotEmpty()) {
-            isRunning = false
-            stopForeground(true)
-            stopSelf()
-            Toast.makeText(this, "代理启动失败：" + err, Toast.LENGTH_LONG).show()
-        } else isRunning = true
+        if (auth && (user.isBlank() || pass.isBlank())) {
+            stopForeground(true); stopSelf(); return START_NOT_STICKY
+        }
+        try {
+            server = ServerSocket(6668, 64, InetAddress.getByName("0.0.0.0"))
+            running.set(true); isRunning = true
+            workers.execute {
+                while (running.get()) {
+                    try {
+                        val client = server?.accept() ?: break
+                        if (!isLanAddress(client.inetAddress)) client.close()
+                        else workers.execute { handleClient(client, auth, user, pass) }
+                    } catch (_: Exception) { if (!running.get()) break }
+                }
+            }
+        } catch (_: Exception) { stopProxy(); stopForeground(true); stopSelf() }
         return START_NOT_STICKY
     }
+
+    private fun isLanAddress(a: InetAddress): Boolean =
+        a.isLoopbackAddress || a.isSiteLocalAddress || a.isLinkLocalAddress
+
+    private fun handleClient(client: Socket, auth: Boolean, user: String, pass: String) {
+        client.use { socket ->
+            socket.soTimeout = 30000
+            val input = BufferedInputStream(socket.getInputStream())
+            val output = BufferedOutputStream(socket.getOutputStream())
+            val header = java.io.ByteArrayOutputStream()
+            var state = 0
+            while (header.size() < 32768) {
+                val b = input.read()
+                if (b < 0) return
+                header.write(b)
+                state = when {
+                    state == 0 && b == 13 -> 1
+                    state == 1 && b == 10 -> 2
+                    state == 2 && b == 13 -> 3
+                    state == 3 && b == 10 -> 4
+                    b == 13 -> 1
+                    else -> 0
+                }
+                if (state == 4) break
+            }
+            if (state != 4) { respond(output, "431 Request Header Fields Too Large"); return }
+            val lines = String(header.toByteArray(), Charsets.ISO_8859_1).split("\\r\\n")
+            val parts = lines.firstOrNull()?.split(" ") ?: emptyList()
+            if (parts.size < 3) { respond(output, "400 Bad Request"); return }
+            val method = parts[0].uppercase()
+            val target = parts[1]
+            val authLine = lines.firstOrNull { it.startsWith("Proxy-Authorization:", true) }
+            if (auth && !checkAuth(authLine?.substringAfter(":")?.trim(), user, pass)) {
+                output.write("HTTP/1.1 407 Proxy Authentication Required\\r\\nProxy-Authenticate: Basic realm=\\"Hide Wi-Fi\\"\\r\\nConnection: close\\r\\nContent-Length: 0\\r\\n\\r\\n".toByteArray(Charsets.ISO_8859_1))
+                output.flush(); return
+            }
+            val uri = if (method == "CONNECT") null else try { java.net.URI(target) } catch (_: Exception) { null }
+            val host = if (method == "CONNECT") target.substringBeforeLast(":").removePrefix("[").removeSuffix("]")
+                else uri?.host
+            val port = if (method == "CONNECT") target.substringAfterLast(":", "443").toIntOrNull() ?: 443
+                else if (uri?.port ?: -1 > 0) uri!!.port else 80
+            if (host.isNullOrBlank() || port !in 1..65535) { respond(output, "400 Bad Request"); return }
+            val upstream = try { Socket(host, port).apply { soTimeout = 30000 } }
+                catch (_: Exception) { respond(output, "502 Bad Gateway"); return }
+            upstream.use { remote ->
+                if (method == "CONNECT") {
+                    output.write("HTTP/1.1 200 Connection Established\\r\\n\\r\\n".toByteArray(Charsets.ISO_8859_1))
+                    output.flush()
+                    socket.soTimeout = 0; remote.soTimeout = 0
+                    val a = Thread { copyStream(input, remote.getOutputStream()) }
+                    val b = Thread { copyStream(remote.getInputStream(), output) }
+                    a.start(); b.start(); a.join(); b.join()
+                } else {
+                    if (uri == null || uri.scheme != "http") { respond(output, "400 Bad Request"); return }
+                    val path = (uri.rawPath.ifEmpty { "/" }) + (if (uri.rawQuery != null) "?" + uri.rawQuery else "")
+                    val req = StringBuilder().append(method).append(" ").append(path).append(" ").append(parts[2]).append("\\r\\n")
+                    lines.drop(1).filter { it.isNotBlank() && !it.startsWith("Proxy-Authorization:", true) && !it.startsWith("Proxy-Connection:", true) }
+                        .forEach { req.append(it).append("\\r\\n") }
+                    req.append("Connection: close\\r\\n\\r\\n")
+                    remote.getOutputStream().write(req.toString().toByteArray(Charsets.ISO_8859_1))
+                    remote.getOutputStream().flush()
+                    input.copyTo(remote.getOutputStream()); remote.getOutputStream().flush()
+                    remote.getInputStream().copyTo(output); output.flush()
+                }
+            }
+        }
+    }
+
+    private fun checkAuth(value: String?, user: String, pass: String): Boolean {
+        if (value == null || !value.startsWith("Basic ", true)) return false
+        val decoded = try { String(Base64.getDecoder().decode(value.substringAfter(" ").trim()), Charsets.UTF_8) }
+            catch (_: Exception) { return false }
+        return decoded == user + ":" + pass
+    }
+
+    private fun respond(out: BufferedOutputStream, status: String) {
+        out.write(("HTTP/1.1 " + status + "\\r\\nConnection: close\\r\\nContent-Length: 0\\r\\n\\r\\n").toByteArray(Charsets.ISO_8859_1))
+        out.flush()
+    }
+
+    private fun copyStream(input: java.io.InputStream, output: java.io.OutputStream) {
+        try { input.copyTo(output); output.flush() } catch (_: Exception) {}
+    }
+
+    private fun stopProxy() {
+        running.set(false); isRunning = false
+        try { server?.close() } catch (_: Exception) {}
+        server = null
+    }
+
     override fun onDestroy() {
-        Usqueandroid.stopSocksProxy()
-        isRunning = false
-        super.onDestroy()
+        stopProxy(); workers.shutdownNow(); super.onDestroy()
     }
     override fun onBind(intent: Intent?): IBinder? = null
 }
@@ -343,7 +506,7 @@ manifest = manifest.replace('android:icon="@drawable/ic_vpn"', 'android:icon="@d
 if 'android:name=".ProxyService"' not in manifest:
     manifest = manifest.replace('        <!-- VPN Service -->', '''        <service android:name=".ProxyService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Authenticated LAN SOCKS5 proxy over Cloudflare MASQUE" />
+                android:value="Authenticated LAN HTTP proxy over Cloudflare MASQUE" />
         </service>
         <!-- VPN Service -->''')
 write("AndroidManifest.xml", manifest)
@@ -353,187 +516,4 @@ build = gradle.read_text(encoding="utf-8").replace("versionCode = 5", "versionCo
 build = build.replace('versionName = "1.1.0"', 'versionName = "1.2.0"')
 gradle.write_text(build, encoding="utf-8")
 
-l4 = REPO / "upstream/usque-android/api/l4proxy.go"
-l4src = l4.read_text(encoding="utf-8")
-if "func (p *L4Proxy) Close()" not in l4src:
-    l4src += """
-// Close releases the cached HTTP/3 connection used by this L4 proxy.
-func (p *L4Proxy) Close() error {
-    if p == nil { return nil }
-    p.connMu.Lock()
-    client := p.client
-    p.client = nil
-    p.connMu.Unlock()
-    if client != nil { closeL4HTTP3(client.udpConn, client.quicConn) }
-    return nil
-}
-"""
-    l4.write_text(l4src, encoding="utf-8")
-
-go = REPO / "upstream/usque-android/android/usque_android.go"
-src = go.read_text(encoding="utf-8")
-if '"crypto/subtle"' not in src:
-    src = src.replace('"context"\n', '"context"\n\t"crypto/subtle"\n')
-if '"encoding/binary"' not in src:
-    src = src.replace('"fmt"\n', '"fmt"\n\t"encoding/binary"\n')
-if '"github.com/quic-go/quic-go"' not in src:
-    src = src.replace('"github.com/Diniboy1123/usque/internal"\n', '"github.com/Diniboy1123/usque/internal"\n\tquic "github.com/quic-go/quic-go"\n')
-
-proxy_code = r"""
-type lanSocksProxyState struct {
-    mu sync.Mutex
-    listener net.Listener
-    proxy *api.L4Proxy
-    cancel context.CancelFunc
-    clients map[net.Conn]struct{}
-}
-var lanProxy = &lanSocksProxyState{clients: make(map[net.Conn]struct{})}
-
-// StartSocksProxy starts a password-protected TCP-only SOCKS5 proxy.
-// Domain names are sent through MASQUE CONNECT for remote DNS resolution.
-func StartSocksProxy(configPath string, bindAddress string, port int, username string, password string) string {
-    lanProxy.mu.Lock()
-    defer lanProxy.mu.Unlock()
-    if lanProxy.listener != nil { return "SOCKS5 proxy is already running" }
-    if username == "" || password == "" { return "SOCKS5 username and password are required" }
-    if port < 1 || port > 65535 { return "invalid SOCKS5 port" }
-    if err := config.LoadConfig(configPath); err != nil { return fmt.Sprintf("load config: %v", err) }
-    privKey, err := config.AppConfig.GetEcPrivateKey()
-    if err != nil { return fmt.Sprintf("private key: %v", err) }
-    peerPubKey, err := config.AppConfig.GetEcEndpointPublicKey()
-    if err != nil { return fmt.Sprintf("peer public key: %v", err) }
-    cert, err := internal.GenerateCert(privKey, &privKey.PublicKey)
-    if err != nil { return fmt.Sprintf("client certificate: %v", err) }
-    tlsConfig, err := api.PrepareTlsConfig(privKey, peerPubKey, cert, internal.L4ConnectSNI, false)
-    if err != nil { return fmt.Sprintf("TLS config: %v", err) }
-    endpointAddr, err := config.SelectEndpointFromConfig(false, false, 443)
-    if err != nil { return fmt.Sprintf("MASQUE endpoint: %v", err) }
-    endpoint, ok := endpointAddr.(*net.UDPAddr)
-    if !ok || endpoint == nil { return "invalid MASQUE UDP endpoint" }
-    l4, err := api.NewL4Proxy(api.L4ProxyConfig{
-        TLSConfig: tlsConfig,
-        QUICConfig: &quic.Config{
-            EnableDatagrams: false, KeepAlivePeriod: 30*time.Second,
-            InitialConnectionReceiveWindow: 10_000_000, MaxConnectionReceiveWindow: 10_000_000,
-            InitialStreamReceiveWindow: 1_000_000, MaxStreamReceiveWindow: 1_000_000,
-            MaxIncomingStreams: 100, MaxIncomingUniStreams: 100,
-        },
-        Endpoint: endpoint, ResolveLocally: false,
-        ConnectTimeout: 15*time.Second, ConnectRetryCount: 2,
-    })
-    if err != nil { return fmt.Sprintf("create MASQUE proxy: %v", err) }
-    listener, err := net.Listen("tcp", net.JoinHostPort(bindAddress, strconv.Itoa(port)))
-    if err != nil { _ = l4.Close(); return fmt.Sprintf("listen: %v", err) }
-    ctx, cancel := context.WithCancel(context.Background())
-    lanProxy.listener, lanProxy.proxy, lanProxy.cancel = listener, l4, cancel
-    lanProxy.clients = make(map[net.Conn]struct{})
-    go acceptLanSocks(ctx, listener, l4, username, password)
-    return ""
-}
-
-// StopSocksProxy closes the listener, client sockets, and shared MASQUE connection.
-func StopSocksProxy() {
-    lanProxy.mu.Lock()
-    listener, proxy, cancel := lanProxy.listener, lanProxy.proxy, lanProxy.cancel
-    clients := make([]net.Conn, 0, len(lanProxy.clients))
-    for c := range lanProxy.clients { clients = append(clients, c) }
-    lanProxy.listener, lanProxy.proxy, lanProxy.cancel = nil, nil, nil
-    lanProxy.clients = make(map[net.Conn]struct{})
-    lanProxy.mu.Unlock()
-    if cancel != nil { cancel() }
-    if listener != nil { _ = listener.Close() }
-    for _, c := range clients { _ = c.Close() }
-    if proxy != nil { _ = proxy.Close() }
-}
-
-// IsSocksProxyRunning reports whether the LAN SOCKS5 listener is active.
-func IsSocksProxyRunning() bool {
-    lanProxy.mu.Lock()
-    defer lanProxy.mu.Unlock()
-    return lanProxy.listener != nil
-}
-
-func acceptLanSocks(ctx context.Context, listener net.Listener, proxy *api.L4Proxy, username, password string) {
-    for {
-        conn, err := listener.Accept()
-        if err != nil { return }
-        lanProxy.mu.Lock()
-        if lanProxy.listener != listener {
-            lanProxy.mu.Unlock()
-            _ = conn.Close()
-            return
-        }
-        lanProxy.clients[conn] = struct{}{}
-        lanProxy.mu.Unlock()
-        go func(c net.Conn) {
-            defer func() {
-                _ = c.Close()
-                lanProxy.mu.Lock()
-                delete(lanProxy.clients, c)
-                lanProxy.mu.Unlock()
-            }()
-            serveLanSocks(ctx, c, proxy, username, password)
-        }(conn)
-    }
-}
-
-func serveLanSocks(ctx context.Context, client net.Conn, proxy *api.L4Proxy, username, password string) {
-    _ = client.SetDeadline(time.Now().Add(20*time.Second))
-    var head [2]byte
-    if _, err := io.ReadFull(client, head[:]); err != nil || head[0] != 5 { return }
-    methods := make([]byte, int(head[1]))
-    if _, err := io.ReadFull(client, methods); err != nil { return }
-    hasAuth := false
-    for _, method := range methods { if method == 2 { hasAuth = true } }
-    if !hasAuth { _, _ = client.Write([]byte{5, 0xff}); return }
-    if _, err := client.Write([]byte{5, 2}); err != nil { return }
-
-    var authHead [2]byte
-    if _, err := io.ReadFull(client, authHead[:]); err != nil || authHead[0] != 1 { return }
-    userBytes := make([]byte, int(authHead[1]))
-    if _, err := io.ReadFull(client, userBytes); err != nil { return }
-    var passLen [1]byte
-    if _, err := io.ReadFull(client, passLen[:]); err != nil { return }
-    passBytes := make([]byte, int(passLen[0]))
-    if _, err := io.ReadFull(client, passBytes); err != nil { return }
-    if subtle.ConstantTimeCompare(userBytes, []byte(username)) != 1 || subtle.ConstantTimeCompare(passBytes, []byte(password)) != 1 {
-        _, _ = client.Write([]byte{1, 1})
-        return
-    }
-    if _, err := client.Write([]byte{1, 0}); err != nil { return }
-
-    var req [4]byte
-    if _, err := io.ReadFull(client, req[:]); err != nil || req[0] != 5 { return }
-    if req[1] != 1 { _, _ = client.Write([]byte{5, 7, 0, 1, 0, 0, 0, 0, 0, 0}); return }
-    var host string
-    switch req[3] {
-    case 1:
-        b := make([]byte, 4); if _, err := io.ReadFull(client, b); err != nil { return }; host = net.IP(b).String()
-    case 3:
-        var n [1]byte; if _, err := io.ReadFull(client, n[:]); err != nil { return }
-        b := make([]byte, int(n[0])); if _, err := io.ReadFull(client, b); err != nil { return }; host = string(b)
-    case 4:
-        b := make([]byte, 16); if _, err := io.ReadFull(client, b); err != nil { return }; host = net.IP(b).String()
-    default:
-        _, _ = client.Write([]byte{5, 8, 0, 1, 0, 0, 0, 0, 0, 0}); return
-    }
-    var portBytes [2]byte
-    if _, err := io.ReadFull(client, portBytes[:]); err != nil { return }
-    port := int(binary.BigEndian.Uint16(portBytes[:]))
-    if host == "" || port == 0 { _, _ = client.Write([]byte{5, 1, 0, 1, 0, 0, 0, 0, 0, 0}); return }
-    _ = client.SetDeadline(time.Time{})
-    upstream, err := proxy.DialContext(ctx, net.JoinHostPort(host, strconv.Itoa(port)))
-    if err != nil {
-        _, _ = client.Write([]byte{5, 5, 0, 1, 0, 0, 0, 0, 0, 0})
-        return
-    }
-    if _, err := client.Write([]byte{5, 0, 0, 1, 0, 0, 0, 0, 0, 0}); err != nil { _ = upstream.Close(); return }
-    api.RelayTCP(client, upstream)
-}
-
-"""
-if "func StartSocksProxy(" not in src:
-    src = src.replace("// GetVersion returns the Android wrapper version.", proxy_code + "// GetVersion returns the Android wrapper version.")
-src = src.replace('return "1.1.0-android"', 'return "1.2.0-android"')
-go.write_text(src, encoding="utf-8")
-print("Hide Wi-Fi 1.2.0 customization applied.")
+print("Hide Wi-Fi HTTP proxy customization applied.")
