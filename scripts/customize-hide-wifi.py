@@ -419,6 +419,7 @@ class ProxyService : Service() {
 
     private fun handleClient(client: Socket, auth: Boolean, user: String, pass: String) {
         client.use { socket ->
+            if (!UsqueVpnService.isConnected) { respond(BufferedOutputStream(socket.getOutputStream()), "502 WARP VPN Disconnected"); return }
             socket.soTimeout = 30000
             val input = BufferedInputStream(socket.getInputStream())
             val output = BufferedOutputStream(socket.getOutputStream())
@@ -446,7 +447,7 @@ class ProxyService : Service() {
             val target = parts[1]
             val authLine = lines.firstOrNull { it.startsWith("Proxy-Authorization:", true) }
             if (auth && !checkAuth(authLine?.substringAfter(":")?.trim(), user, pass)) {
-                output.write("HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\\"Hide Wi-Fi\\"\r\nConnection: close\r\nContent-Length: 0\r\n\r\n".toByteArray(Charsets.ISO_8859_1))
+                output.write("HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=Hide-Wi-Fi\\r\\nConnection: close\r\nContent-Length: 0\r\n\r\n".toByteArray(Charsets.ISO_8859_1))
                 output.flush(); return
             }
             val uri = if (method == "CONNECT") null else try { java.net.URI(target) } catch (_: Exception) { null }
@@ -491,12 +492,14 @@ class ProxyService : Service() {
     }
 
     private fun relay(client: Socket, upstream: Socket, clientInput: java.io.InputStream, clientOutput: java.io.OutputStream) {
-        val upstreamToClient = Thread { copyStream(upstream.getInputStream(), clientOutput) }
-        val clientToUpstream = Thread { copyStream(clientInput, upstream.getOutputStream()) }
+        val finished = java.util.concurrent.CountDownLatch(1)
+        val upstreamToClient = Thread { copyStream(upstream.getInputStream(), clientOutput); finished.countDown() }
+        val clientToUpstream = Thread { copyStream(clientInput, upstream.getOutputStream()); finished.countDown() }
         upstreamToClient.start()
         clientToUpstream.start()
-        upstreamToClient.join()
+        finished.await()
         try { client.close(); upstream.close() } catch (_: Exception) {}
+        upstreamToClient.join(1000)
         clientToUpstream.join(1000)
     }
 
