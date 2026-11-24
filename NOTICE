@@ -1,0 +1,8 @@
+This repository builds the Android application from the pinned upstream project:
+
+  https://github.com/Abobo7/usque-android
+  Commit: 1bc50c004b99e6df42fc17f4f93320d782020dde
+
+The upstream project is distributed under the MIT License. Its copyright and license notice are retained in the upstream submodule at upstream/usque-android/LICENSE.md.
+
+The WARP-MASQUE-Android repository's README, workflow and build integration are maintained separately. Cloudflare and WARP are trademarks of their respective owners. This project is not affiliated with or endorsed by Cloudflare.
