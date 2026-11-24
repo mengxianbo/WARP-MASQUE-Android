@@ -71,6 +71,7 @@ jobs:
           grep -q 'minSdk = 26' upstream/usque-android/android/usque-vpn/app/build.gradle.kts
 
       - name: Prepare release signing key
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -91,10 +92,17 @@ jobs:
           echo "ANDROID_KEY_PASSWORD=$ANDROID_KEY_PASSWORD" >> "$GITHUB_ENV"
 
       - name: Build signed release APK
+        if: startsWith(github.ref, 'refs/tags/v')
         working-directory: upstream/usque-android/android/usque-vpn
         run: ./gradlew --no-daemon clean assembleRelease
 
-      - name: Verify signed APK and native ABIs
+      - name: Build debug APK for CI validation
+        if: "!startsWith(github.ref, 'refs/tags/v')"
+        working-directory: upstream/usque-android/android/usque-vpn
+        run: ./gradlew --no-daemon clean assembleDebug
+
+      - name: Verify signed release APK and native ABIs
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           set -euo pipefail
           apk="upstream/usque-android/android/usque-vpn/app/build/outputs/apk/release/app-release.apk"
@@ -107,6 +115,20 @@ jobs:
           mkdir -p dist
           cp "$apk" dist/Hide-WiFi-v1.4.0.apk
           sha256sum dist/Hide-WiFi-v1.4.0.apk > dist/SHA256SUMS.txt
+          cat dist/SHA256SUMS.txt
+
+      - name: Verify debug APK for CI validation
+        if: "!startsWith(github.ref, 'refs/tags/v')"
+        run: |
+          set -euo pipefail
+          apk="upstream/usque-android/android/usque-vpn/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$apk"
+          unzip -l "$apk" | tee apk-files.txt
+          grep -q 'lib/arm64-v8a/' apk-files.txt
+          grep -q 'lib/armeabi-v7a/' apk-files.txt
+          mkdir -p dist
+          cp "$apk" dist/Hide-WiFi-debug.apk
+          sha256sum dist/Hide-WiFi-debug.apk > dist/SHA256SUMS.txt
           cat dist/SHA256SUMS.txt
 
       - name: Upload APK artifact
