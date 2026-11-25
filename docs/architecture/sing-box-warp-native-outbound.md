@@ -24,16 +24,48 @@ Android VpnService (single owner)
            -> direct outbound (standalone) --------------> Internet
 ```
 
-## WARP outbound contract
+## Implemented Go adapter milestone
 
-Implement a real sing-box outbound adapter (not an Android VPN service wrapper):
+The branch now contains a build-time injected sing-box outbound with type `warp`:
 
-- Register an outbound type/tag (for example `warp`) in the sing-box outbound registry used by the pinned v1.14.4 build.
-- Implement the sing-box outbound dialer contract for TCP and packet/UDP traffic, lifecycle start/close, interface-change handling, and cancellation.
-- Carry WARP's MASQUE/QUIC transport without creating or owning an Android TUN descriptor.
-- Ensure the WARP underlay socket is protected/bound to the physical network so it cannot re-enter the sing-box TUN.
-- Expose WARP as a dialer usable by VLESS via the supported `detour`/dialer chain mechanism. Validate TCP and UDP independently; do not advertise UDP until packet semantics are implemented and tested.
-- Keep WARP registration/account state separate from node share links and never commit credentials/private keys.
+- It reads the existing usque account config from `config_path`, derives the client certificate, and validates the MASQUE endpoint public key.
+- It uses usque's HTTP/3 L4 CONNECT client to create TCP streams through WARP.
+- Its QUIC UDP socket is created through sing-box's `NetworkManager.ProtectFunc()`, so Android can protect the underlay socket from the app's VPN TUN.
+- It implements sing-box outbound registration, lifecycle cleanup, and network-change reset.
+- It advertises **TCP only**. This is sufficient for the VLESS server transport: VLESS UDP payloads can be encapsulated inside the VLESS TCP connection. It is not yet a general-purpose WARP UDP outbound.
+
+Example sing-box configuration shape:
+
+```json
+{
+  "outbounds": [
+    {
+      "type": "warp",
+      "tag": "warp",
+      "config_path": "/absolute/app-private-path/warp-config.json",
+      "sni": "consumer-masque.cloudflareclient.com"
+    },
+    {
+      "type": "vless",
+      "tag": "node-vless",
+      "server": "vless.example.com",
+      "server_port": 443,
+      "uuid": "00000000-0000-0000-0000-000000000000",
+      "tls": { "enabled": true, "server_name": "vless.example.com" },
+      "detour": "warp"
+    }
+  ]
+}
+```
+
+The Android config builder still needs to supply the actual private app config path and select `detour: warp` per node. Do not hand this example to users as a ready-to-paste profile.
+
+## Remaining work
+
+- Add the runtime config builder / per-node detour wiring in Android.
+- Implement a full WARP IP/UDP data plane for standalone WARP mode; this first adapter intentionally rejects packet connections.
+- Add tests for MASQUE certificate pinning, TCP CONNECT, socket protection, interface changes, VLESS chain egress, DNS and IPv6.
+- Build the APK and validate on a real Android device before claiming the chain is usable.
 
 ## Important distinction: current bridge is not this adapter
 
@@ -54,4 +86,4 @@ Before replacing it, inspect the exact pinned usque Android API and the sing-box
 
 ## Current implementation status
 
-The current node store persists a per-node `warp` or `direct` preference and the activity displays a node-management preview. The current Go bridge exposes WARP tunnel lifecycle methods; it is not a registered sing-box outbound. Therefore the chain is **not implemented yet** and no APK should be described as supporting VLESS -> WARP until the acceptance tests above pass.
+The node store still persists per-node `warp` or `direct` preferences as preview data. The Go source now contains a TCP-only `warp` outbound adapter and a build-time registration patch, but the Android config builder does not yet translate those preferences into runtime `detour` settings. The outbound and chain are therefore not yet user-operational; no APK should be described as supporting VLESS -> WARP until CI, runtime wiring and real-device acceptance tests pass.
