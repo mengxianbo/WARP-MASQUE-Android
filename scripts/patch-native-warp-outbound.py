@@ -70,6 +70,11 @@ target.parent.mkdir(parents=True, exist_ok=True)
 source = Path(__file__).resolve().parents[1] / "integration/go/protocol/hidewifiwarp/outbound.go"
 target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
 
+# Keep usque's internal-package imports inside the usque module boundary.
+helper_source = Path(__file__).resolve().parents[1] / "integration/go/usque/api/hidewifi_config.go"
+helper_target = usque / "api/hidewifi_config.go"
+helper_target.write_text(helper_source.read_text(encoding="utf-8"), encoding="utf-8")
+
 option_file = singbox / "option/outbound.go"
 option_type = (
     "\n// WarpOutboundOptions configures the Cloudflare WARP MASQUE TCP dialer.\n"
