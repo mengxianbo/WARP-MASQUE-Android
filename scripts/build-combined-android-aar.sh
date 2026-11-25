@@ -5,7 +5,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 UPSTREAM="$ROOT/upstream/usque-android"
 ANDROID_DIR="$UPSTREAM/android"
 APP="$ANDROID_DIR/usque-vpn/app"
-BIND_DIR="$ANDROID_DIR/hidewifi-bind"
+BUILD_ROOT="$ANDROID_DIR/hidewifi-bind"
+SINGBOX_DIR="$BUILD_ROOT/sing-box"
 AAR="$ANDROID_DIR/usque.aar"
 
 : "${ANDROID_HOME:=${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}"
@@ -13,9 +14,7 @@ export ANDROID_HOME ANDROID_SDK_ROOT="$ANDROID_HOME"
 : "${ANDROID_NDK_HOME:=$ANDROID_HOME/ndk/28.0.13004108}"
 export ANDROID_NDK_HOME
 
-# Match sing-box v1.14.4's own gomobile toolchain and build tags.
-# gomobile must also be present in the target module's go.mod: gobind resolves
-# github.com/sagernet/gomobile/bind from that module, not from GOBIN.
+# Use the exact gomobile version pinned by sing-box v1.14.4.
 GOMOBILE_VERSION="v0.1.12"
 GOBIN="$(go env GOPATH)/bin"
 export GOBIN
@@ -23,27 +22,23 @@ go install "github.com/sagernet/gomobile/cmd/gomobile@$GOMOBILE_VERSION"
 go install "github.com/sagernet/gomobile/cmd/gobind@$GOMOBILE_VERSION"
 "$GOBIN/gomobile" init -v
 
-mkdir -p "$BIND_DIR" "$APP/libs"
-cat > "$BIND_DIR/go.mod" <<'EOF'
-module github.com/mengxianbo/hidewifi-android-bind
+mkdir -p "$BUILD_ROOT" "$APP/libs"
+# Build from sing-box's own module root, not from a synthetic wrapper module.
+# Go ignores replace directives in dependency go.mod files; using sing-box as
+# the main module preserves its pinned fork replacements and build constraints.
+if [[ ! -f "$SINGBOX_DIR/go.mod" ]]; then
+  module_json="$(go mod download -json github.com/sagernet/sing-box@v1.14.4)"
+  module_dir="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["Dir"])' <<< "$module_json")"
+  cp -a "$module_dir" "$SINGBOX_DIR"
+fi
 
-go 1.25.5
-
-require (
-    github.com/Diniboy1123/usque v0.0.0
-    github.com/sagernet/gomobile v0.1.12
-    github.com/sagernet/sing-box v1.14.4
-)
-
-replace github.com/Diniboy1123/usque => ../..
-EOF
-
-cd "$BIND_DIR"
+cd "$SINGBOX_DIR"
+go mod edit -require=github.com/Diniboy1123/usque@v0.0.0
+go mod edit -replace="github.com/Diniboy1123/usque=$UPSTREAM"
 go mod download
 
-# These are the official sing-box Android tags from cmd/internal/build_libbox.
-# Keep both engines in one gomobile invocation so the resulting AAR contains
-# only one Go runtime / go.Seq implementation.
+# Official sing-box Android build tags and linker flags (v1.14.4).
+# Both exported packages are bound in one invocation and one Go runtime.
 "$GOBIN/gomobile" bind -v \
   -target=android/arm64,android/arm \
   -androidapi 26 \
@@ -55,9 +50,9 @@ go mod download
   -ldflags="-s -w -buildid= -X github.com/sagernet/sing-box/constant.Version=1.14.4 -X runtime.godebugDefault=multipathtcp=0,tlssha1=1 -checklinkname=0" \
   -o "$AAR" \
   github.com/Diniboy1123/usque/android \
-  github.com/sagernet/sing-box/experimental/libbox
+  ./experimental/libbox
 
 test -s "$AAR"
 cp "$AAR" "$APP/libs/usque.aar"
-echo "Built one combined AAR containing WARP + sing-box with one gomobile runtime:"
+echo "Built one combined WARP + sing-box AAR:"
 ls -lh "$AAR"
