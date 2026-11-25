@@ -43,12 +43,10 @@ go mod download
 # QUIC underlay socket factory into the pinned source copies.
 python3 "$ROOT/scripts/patch-native-warp-outbound.py" "$UPSTREAM" "$SINGBOX_DIR"
 
-# TEMPORARY COMPATIBILITY BRIDGE ONLY:
-# These methods expose the existing usque Android TUN lifecycle through libbox.
-# They do NOT register a sing-box outbound and do NOT create a VLESS -> WARP
-# dialer chain. In particular, sharing one gomobile package/runtime does not
-# mean the app has a single TUN owner. Do not advertise chain support until a
-# native sing-box outbound adapter is implemented and its acceptance tests pass.
+# Legacy Android tunnel-control compatibility API only:
+# The native hidewifiwarp outbound above does not call StartTunnel or consume
+# an Android TUN descriptor. Never start this legacy tunnel concurrently with
+# the sing-box VpnService; the app must migrate to one VpnService owner.
 cat > experimental/libbox/hidewifi_warp_bridge.go <<'GO_BRIDGE'
 //go:build android
 
