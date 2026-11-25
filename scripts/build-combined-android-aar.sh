@@ -39,8 +39,12 @@ go mod edit -require=github.com/Diniboy1123/usque@v0.0.0
 go mod edit -replace="github.com/Diniboy1123/usque=$UPSTREAM"
 go mod download
 
-# Extend the official libbox package with WARP methods. This keeps both engines
-# inside one gomobile package and one Go runtime; never bind two package paths.
+# TEMPORARY COMPATIBILITY BRIDGE ONLY:
+# These methods expose the existing usque Android TUN lifecycle through libbox.
+# They do NOT register a sing-box outbound and do NOT create a VLESS -> WARP
+# dialer chain. In particular, sharing one gomobile package/runtime does not
+# mean the app has a single TUN owner. Do not advertise chain support until a
+# native sing-box outbound adapter is implemented and its acceptance tests pass.
 cat > experimental/libbox/hidewifi_warp_bridge.go <<'GO_BRIDGE'
 //go:build android
 
