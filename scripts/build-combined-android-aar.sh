@@ -39,8 +39,14 @@ go mod edit -require=github.com/Diniboy1123/usque@v0.0.0
 go mod edit -replace="github.com/Diniboy1123/usque=$UPSTREAM"
 go mod download
 
-# Extend the official libbox package with WARP methods. This keeps both engines
-# inside one gomobile package and one Go runtime; never bind two package paths.
+# Inject the real sing-box WARP MASQUE TCP outbound and Android-protected
+# QUIC underlay socket factory into the pinned source copies.
+python3 "$ROOT/scripts/patch-native-warp-outbound.py" "$UPSTREAM" "$SINGBOX_DIR"
+
+# Legacy Android tunnel-control compatibility API only:
+# The native hidewifiwarp outbound above does not call StartTunnel or consume
+# an Android TUN descriptor. Never start this legacy tunnel concurrently with
+# the sing-box VpnService; the app must migrate to one VpnService owner.
 cat > experimental/libbox/hidewifi_warp_bridge.go <<'GO_BRIDGE'
 //go:build android
 
@@ -131,9 +137,9 @@ func WarpTestEndpoint(configPath string, endpoint string, timeoutMs int64) strin
 }
 GO_BRIDGE
 
-# Sanity-check the bridge package before invoking gomobile.
-gofmt -w experimental/libbox/hidewifi_warp_bridge.go
-go test -run '^$' -tags=with_gvisor,with_quic,with_wireguard,with_utls,with_naive_outbound,with_clash_api,with_usbip,with_openvpn,with_openconnect,badlinkname,tfogo_checklinkname0,with_tailscale,ts_omit_logtail,ts_omit_ssh,ts_omit_drive,ts_omit_taildrop,ts_omit_webclient,ts_omit_doctor,ts_omit_capture,ts_omit_kube,ts_omit_aws,ts_omit_synology,ts_omit_bird ./experimental/libbox
+# Compile-check the custom WARP outbound and libbox bridge before binding.
+gofmt -w protocol/hidewifiwarp/outbound.go experimental/libbox/hidewifi_warp_bridge.go "$UPSTREAM/api/l4proxy.go" "$UPSTREAM/api/hidewifi_config.go"
+go test -run '^$' -tags=with_gvisor,with_quic,with_wireguard,with_utls,with_naive_outbound,with_clash_api,with_usbip,with_openvpn,with_openconnect,badlinkname,tfogo_checklinkname0,with_tailscale,ts_omit_logtail,ts_omit_ssh,ts_omit_drive,ts_omit_taildrop,ts_omit_webclient,ts_omit_doctor,ts_omit_capture,ts_omit_kube,ts_omit_aws,ts_omit_synology,ts_omit_bird ./protocol/hidewifiwarp ./experimental/libbox
 
 "$GOBIN/gomobile" bind -v \
   -target=android/arm64,android/arm \
