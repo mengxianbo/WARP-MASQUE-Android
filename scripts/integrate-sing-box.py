@@ -4,19 +4,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "upstream/usque-android/android/usque-vpn/app"
-AAR = APP / "libs/libbox.aar"
 GRADLE = APP / "build.gradle.kts"
 MANIFEST = APP / "src/main/AndroidManifest.xml"
-if not AAR.is_file() or AAR.stat().st_size < 100_000_000:
-    raise SystemExit("Missing/incomplete libbox.aar; download step did not complete")
 gradle = GRADLE.read_text(encoding="utf-8")
-dep = 'implementation(files("libs/libbox.aar"))'
-if dep not in gradle:
-    marker = 'implementation(files("libs/usque.aar"))'
-    if marker not in gradle:
-        raise SystemExit("Could not locate existing usque AAR dependency")
-    gradle = gradle.replace(marker, marker + '\n    // Official sing-box Android core\n    ' + dep)
-    GRADLE.write_text(gradle, encoding="utf-8")
+marker = 'implementation(files("libs/usque.aar"))'
+if marker not in gradle:
+    raise SystemExit("Could not locate combined WARP + sing-box AAR dependency")
 
 source_root = ROOT / "integration/src/main/kotlin/com/abobo/usquevpn"
 target_root = APP / "src/main/kotlin/com/abobo/usquevpn"
@@ -50,4 +43,4 @@ if main_activity.exists():
     elif "NodeProfilesActivity::class.java" not in main_text:
         raise SystemExit("Could not safely add node manager to the existing app menu")
     main_activity.write_text(main_text, encoding="utf-8")
-print("Installed sing-box AAR, version bridge, local node store and profile activity")
+print("Installed combined WARP + sing-box bindings, local node store and profile activity")
