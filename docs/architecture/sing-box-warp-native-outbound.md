@@ -1,89 +1,77 @@
-# sing-box + WARP native outbound architecture
+# sing-box + WARP + VLESS WebSocket + custom proxy outbounds
 
-## Product requirement
+## Product requirements
 
-Hide Wi-Fi must run exactly one Android `VpnService` and one sing-box TUN. WARP and user-imported proxy nodes are outbounds inside that sing-box runtime. A second WARP-owned TUN is not an acceptable implementation.
+Hide Wi-Fi retains its existing WARP feature and uses one Android VPN service and one sing-box TUN. VLESS is a first-class imported node protocol with these transports:
 
-For every imported proxy node, the user can select:
+- VLESS + WebSocket without TLS (query parameter type=ws and security=none or omitted).
+- VLESS + WebSocket + TLS (query parameter type=ws and security=tls).
 
-- `direct`: the proxy node dials its server over the device's underlying network.
-- `warp`: the proxy node's transport/dialer is carried by the WARP outbound (VLESS -> WARP -> destination).
+The URL importer/runtime converter must preserve UUID, server, port, WS path, Host header and TLS SNI/server name. TLS certificate verification must remain enabled by default. Do not silently downgrade TLS or accept unsupported security modes as WS.
 
-The app also keeps standalone WARP and DIRECT as selectable global modes. Per-node preference and global mode must not overwrite one another.
+Users may add SOCKS5, HTTP and HTTPS outbounds separately. A VLESS node can store a desired egress of WARP, DIRECT, or one of those custom outbounds.
 
-## Required data plane
+## Expected sing-box configuration shape
 
-```text
-Android VpnService (single owner)
-  -> sing-box TUN
-     -> route rules / DNS
-        -> node selector
-           -> VLESS node (detour=warp) -> WARP outbound -> Internet
-           -> VLESS node (detour=direct) ----------------> Internet
-           -> WARP outbound (standalone) ----------------> Internet
-           -> direct outbound (standalone) --------------> Internet
-```
-
-## Implemented Go adapter milestone
-
-The branch now contains a build-time injected sing-box outbound with type `warp`:
-
-- It reads the existing usque account config from `config_path`, derives the client certificate, and validates the MASQUE endpoint public key.
-- It uses usque's HTTP/3 L4 CONNECT client to create TCP streams through WARP.
-- Its QUIC UDP socket is created through sing-box's `NetworkManager.ProtectFunc()`, so Android can protect the underlay socket from the app's VPN TUN.
-- It implements sing-box outbound registration, lifecycle cleanup, and network-change reset.
-- It advertises **TCP only**. This is sufficient for the VLESS server transport: VLESS UDP payloads can be encapsulated inside the VLESS TCP connection. It is not yet a general-purpose WARP UDP outbound.
-
-Example sing-box configuration shape:
+VLESS WS:
 
 ```json
 {
-  "outbounds": [
-    {
-      "type": "warp",
-      "tag": "warp",
-      "config_path": "/absolute/app-private-path/warp-config.json",
-      "sni": "consumer-masque.cloudflareclient.com"
-    },
-    {
-      "type": "vless",
-      "tag": "node-vless",
-      "server": "vless.example.com",
-      "server_port": 443,
-      "uuid": "00000000-0000-0000-0000-000000000000",
-      "tls": { "enabled": true, "server_name": "vless.example.com" },
-      "detour": "warp"
-    }
-  ]
+  "type": "vless",
+  "tag": "vless-ws",
+  "server": "vless.example.com",
+  "server_port": 80,
+  "uuid": "00000000-0000-0000-0000-000000000000",
+  "transport": { "type": "ws", "path": "/ws", "headers": { "Host": "cdn.example.com" } }
 }
 ```
 
-The Android config builder still needs to supply the actual private app config path and select `detour: warp` per node. Do not hand this example to users as a ready-to-paste profile.
+VLESS WS + TLS:
 
-## Remaining work
+```json
+{
+  "type": "vless",
+  "tag": "vless-ws-tls",
+  "server": "vless.example.com",
+  "server_port": 443,
+  "uuid": "00000000-0000-0000-0000-000000000000",
+  "transport": { "type": "ws", "path": "/ws", "headers": { "Host": "cdn.example.com" } },
+  "tls": { "enabled": true, "server_name": "cdn.example.com" }
+}
+```
 
-- Add the runtime config builder / per-node detour wiring in Android.
-- Implement a full WARP IP/UDP data plane for standalone WARP mode; this first adapter intentionally rejects packet connections.
-- Add tests for MASQUE certificate pinning, TCP CONNECT, socket protection, interface changes, VLESS chain egress, DNS and IPv6.
-- Build the APK and validate on a real Android device before claiming the chain is usable.
+These are illustrative sing-box config shapes, not ready-to-use profiles.
 
-## Important distinction: current bridge is not this adapter
+## Custom egress examples
 
-The existing `hidewifi_warp_bridge.go` still exposes legacy `StartTunnel(...)` / `StartTunnelWithFd(...)` methods for compatibility with the old WARP UI. Those APIs attach a WARP tunnel to a TUN file descriptor and are **not** used by the new `hidewifiwarp.Outbound`. Never run the legacy tunnel concurrently with the sing-box VPN service.
+SOCKS5:
 
-The new outbound is registered in the pinned sing-box v1.14.4 registry and uses usque's L4 MASQUE CONNECT implementation. Its underlay UDP socket is created through sing-box's Android socket-protection callback.
+```json
+{ "type": "socks", "tag": "custom-socks", "server": "proxy.example.com", "server_port": 1080, "version": "5" }
+```
 
-## Acceptance criteria
+HTTP / HTTPS:
 
-1. Android starts one `VpnService`; no second WARP VPN consent prompt or second TUN descriptor is created.
-2. Selecting `VLESS -> WARP` makes the VLESS server transport traverse WARP; packet capture / controlled endpoint tests prove the egress.
-3. Selecting `VLESS -> DIRECT` bypasses WARP while retaining VLESS.
-4. Standalone WARP and standalone DIRECT both work.
-5. TCP and UDP tests are reported separately, including DNS, IPv4 and IPv6.
-6. WARP underlay does not loop into TUN; airplane-mode/network-change/reconnect tests pass.
-7. DNS fail-closed behavior is verified: no plaintext DNS fallback when the protected resolver is unavailable.
-8. UI only reports a mode as active after the runtime acknowledges applying it. A stored preference alone is not proof of routing.
+```json
+{ "type": "http", "tag": "custom-http", "server": "proxy.example.com", "server_port": 8080 }
+```
 
-## Current implementation status
+HTTPS additionally enables TLS in the HTTP outbound. Optional credentials are included only when supplied. Runtime must use sing-box outbound detour to chain the VLESS node through the selected egress.
 
-The node store still persists per-node `warp` or `direct` preferences as preview data. The Go source now contains a TCP-only `warp` outbound adapter and a build-time registration patch, but the Android config builder does not yet translate those preferences into runtime `detour` settings. The outbound and chain are therefore not yet user-operational; no APK should be described as supporting VLESS -> WARP until CI, runtime wiring and real-device acceptance tests pass.
+## Current implementation status and limitations
+
+- Android node management UI accepts VLESS URLs only when they specify WebSocket and either no TLS or TLS.
+- Separate SOCKS5 / HTTP / HTTPS outbound profiles can be stored and selected as a per-node preference.
+- Credentials are currently stored in app SharedPreferences; this is not an encrypted credential vault.
+- **The live sing-box config builder and runtime detour wiring are not present in this repository's current Android source tree.** These controls currently persist management preferences and do not yet alter live traffic.
+- The existing native WARP outbound is TCP-only. It can carry the VLESS server's TCP WebSocket transport; do not claim general UDP proxying through WARP.
+- Do not publish this as operational chain routing until runtime config builder, sing-box config validation, Android service integration, CI build and real-device tests are complete.
+
+## Acceptance tests
+
+1. Import valid VLESS WS and VLESS WS+TLS share URLs; verify UUID, server, port, path, Host and SNI survive conversion.
+2. Reject VLESS non-WS transports and unsupported security modes with a clear message.
+3. Add/delete SOCKS5, HTTP and HTTPS outbounds; optional credentials are handled without displaying secrets.
+4. Verify runtime detour for VLESS -> WARP, DIRECT, SOCKS5 and HTTP(S).
+5. Test DNS fail-closed, TLS certificate validation, IPv4/IPv6, reconnect and network changes.
+6. Verify one VPN service/TUN only and no plaintext DNS fallback.
