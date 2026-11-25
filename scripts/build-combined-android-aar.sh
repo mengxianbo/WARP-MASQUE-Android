@@ -139,27 +139,9 @@ func WarpTestEndpoint(configPath string, endpoint string, timeoutMs int64) strin
 }
 GO_BRIDGE
 
-# Sanity-check the bridge package before invoking gomobile.
-gofmt -w experimental/libbox/hidewifi_warp_bridge.go
-go test -run '^
-
-"$GOBIN/gomobile" bind -v \
-  -target=android/arm64,android/arm \
-  -androidapi 26 \
-  -javapkg=io.nekohasekai \
-  -libname=box \
-  -trimpath \
-  -buildvcs=false \
-  -tags=with_gvisor,with_quic,with_wireguard,with_utls,with_naive_outbound,with_clash_api,with_usbip,with_openvpn,with_openconnect,badlinkname,tfogo_checklinkname0,with_tailscale,ts_omit_logtail,ts_omit_ssh,ts_omit_drive,ts_omit_taildrop,ts_omit_webclient,ts_omit_doctor,ts_omit_capture,ts_omit_kube,ts_omit_aws,ts_omit_synology,ts_omit_bird \
-  -ldflags="-s -w -buildid= -X github.com/sagernet/sing-box/constant.Version=1.14.4 -X runtime.godebugDefault=multipathtcp=0,tlssha1=1 -checklinkname=0" \
-  -o "$AAR" \
-  ./experimental/libbox
-
-test -s "$AAR"
-cp "$AAR" "$APP/libs/usque.aar"
-echo "Built unified WARP + sing-box AAR from the single libbox binding package:"
-ls -lh "$AAR"
- -tags=with_gvisor,with_quic,with_wireguard,with_utls,with_naive_outbound,with_clash_api,with_usbip,with_openvpn,with_openconnect,badlinkname,tfogo_checklinkname0,with_tailscale,ts_omit_logtail,ts_omit_ssh,ts_omit_drive,ts_omit_taildrop,ts_omit_webclient,ts_omit_doctor,ts_omit_capture,ts_omit_kube,ts_omit_aws,ts_omit_synology,ts_omit_bird ./protocol/hidewifiwarp ./experimental/libbox
+# Compile-check the custom WARP outbound and libbox bridge before binding.
+gofmt -w protocol/hidewifiwarp/outbound.go experimental/libbox/hidewifi_warp_bridge.go "$UPSTREAM/api/l4proxy.go"
+go test -run '^$' -tags=with_gvisor,with_quic,with_wireguard,with_utls,with_naive_outbound,with_clash_api,with_usbip,with_openvpn,with_openconnect,badlinkname,tfogo_checklinkname0,with_tailscale,ts_omit_logtail,ts_omit_ssh,ts_omit_drive,ts_omit_taildrop,ts_omit_webclient,ts_omit_doctor,ts_omit_capture,ts_omit_kube,ts_omit_aws,ts_omit_synology,ts_omit_bird ./protocol/hidewifiwarp ./experimental/libbox
 
 "$GOBIN/gomobile" bind -v \
   -target=android/arm64,android/arm \
