@@ -62,7 +62,7 @@ func NewOutbound(
 		return nil, E.Cause(err, "warp outbound: read config")
 	}
 	var warpConfig config.Config
-	if err = jsonUnmarshalConfig(rawConfig, &warpConfig); err != nil {
+	if err = json.Unmarshal(rawConfig, &warpConfig); err != nil {
 		return nil, E.Cause(err, "warp outbound: decode config")
 	}
 
