@@ -20,7 +20,7 @@ class NodeProfilesActivity : Activity() {
         })
         root.addView(Button(this).apply { text="导入单个节点 URL"; setOnClickListener { importDialog() } })
         root.addView(TextView(this).apply {
-            text="支持 VLESS / VMess / Trojan / SS / Hysteria2 / TUIC / WireGuard / AnyTLS / SOCKS / HTTP(S)。当前为节点导入与管理预览；出站选项保存后，待共享 TUN 适配完成才会实际接管流量。"
+            text="支持 VLESS / VMess / Trojan / SS / Hysteria2 / TUIC / WireGuard / AnyTLS / SOCKS / HTTP(S)。每个节点可保存 WARP 链式或 DIRECT 偏好。注意：当前仍是管理预览，偏好尚未接入 sing-box 运行时，不会改变实际流量。"
             textSize=12f
         })
         list=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL }
@@ -42,9 +42,9 @@ class NodeProfilesActivity : Activity() {
         nodes.forEach { n ->
             val row=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(0,12,0,12) }
             row.addView(TextView(this).apply { text="${n.name} [${n.scheme}]"; textSize=16f })
-            row.addView(TextView(this).apply { text="出站偏好：${if(n.route=="warp") "WARP" else "直接"}"; textSize=13f })
+            row.addView(TextView(this).apply { text="出口选择：${if(n.route=="warp") "VLESS → WARP（已保存偏好）" else "VLESS → DIRECT（已保存偏好）"}"; textSize=13f })
             val buttons=LinearLayout(this)
-            buttons.addView(Button(this).apply { text="切换出站偏好"; setOnClickListener { store.setRoute(n.id,if(n.route=="warp") "direct" else "warp"); refresh() } })
+            buttons.addView(Button(this).apply { text=if(n.route=="warp") "改为 VLESS → DIRECT" else "改为 VLESS → WARP"; setOnClickListener { store.setRoute(n.id,if(n.route=="warp") "direct" else "warp"); refresh() } })
             buttons.addView(Button(this).apply { text="删除"; setOnClickListener { store.remove(n.id); refresh() } })
             row.addView(buttons); list.addView(row)
         }
