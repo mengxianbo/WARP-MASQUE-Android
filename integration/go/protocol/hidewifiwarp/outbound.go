@@ -2,6 +2,7 @@ package hidewifiwarp
 
 import (
 	"context"
+	"fmt"
 	"net"
 
 	"github.com/sagernet/sing-box/adapter"
