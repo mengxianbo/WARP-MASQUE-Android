@@ -32,4 +32,22 @@ entry = '''        <activity
 if ".NodeProfilesActivity" not in manifest:
     manifest = manifest.replace("    </application>", entry + "\n\n    </application>")
     MANIFEST.write_text(manifest, encoding="utf-8")
+main_activity = target_root / "MainActivity.kt"
+if main_activity.exists():
+    main_text = main_activity.read_text(encoding="utf-8")
+    old_menu = '''.setItems(arrayOf("后台保护", "关于")) { _, which ->
+                if (which == 0) showBackgroundProtection() else showAbout()
+            }'''
+    new_menu = '''.setItems(arrayOf("sing-box 节点管理", "后台保护", "关于")) { _, which ->
+                when (which) {
+                    0 -> startActivity(Intent(this, NodeProfilesActivity::class.java))
+                    1 -> showBackgroundProtection()
+                    else -> showAbout()
+                }
+            }'''
+    if old_menu in main_text:
+        main_text = main_text.replace(old_menu, new_menu)
+    elif "NodeProfilesActivity::class.java" not in main_text:
+        raise SystemExit("Could not safely add node manager to the existing app menu")
+    main_activity.write_text(main_text, encoding="utf-8")
 print("Installed sing-box AAR, version bridge, local node store and profile activity")
