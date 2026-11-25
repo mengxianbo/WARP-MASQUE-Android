@@ -95,7 +95,7 @@ func NewOutbound(
 	if sni == "" {
 		sni = internal.ConnectSNI
 	}
-	tlsConfig, err := api.PrepareTlsConfig(privateKey, peerPublicKey, certificate, sni, options.Insecure)
+	tlsConfig, err := api.PrepareTlsConfig(privateKey, peerPublicKey, certificate, sni, false)
 	if err != nil {
 		return nil, E.Cause(err, "warp outbound: prepare MASQUE TLS")
 	}
@@ -117,6 +117,9 @@ func NewOutbound(
 		return nil, E.New("warp outbound: sing-box network manager is unavailable")
 	}
 	protectSocket := networkManager.ProtectFunc()
+	if protectSocket == nil {
+		return nil, E.New("warp outbound: Android socket protection is unavailable; refusing to risk a TUN loop")
+	}
 	proxy, err := api.NewL4Proxy(api.L4ProxyConfig{
 		TLSConfig: tlsConfig,
 		Endpoint:  endpoint,
