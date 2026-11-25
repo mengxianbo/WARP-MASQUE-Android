@@ -20,7 +20,7 @@ class NodeProfilesActivity : Activity() {
         })
         root.addView(Button(this).apply { text="导入单个节点 URL"; setOnClickListener { importDialog() } })
         root.addView(TextView(this).apply {
-            text="支持 VLESS / VMess / Trojan / SS / Hysteria2 / TUIC / WireGuard / AnyTLS / SOCKS / HTTP(S)"
+            text="支持 VLESS / VMess / Trojan / SS / Hysteria2 / TUIC / WireGuard / AnyTLS / SOCKS / HTTP(S)。当前为节点导入与管理预览；出站选项保存后，待共享 TUN 适配完成才会实际接管流量。"
             textSize=12f
         })
         list=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL }
