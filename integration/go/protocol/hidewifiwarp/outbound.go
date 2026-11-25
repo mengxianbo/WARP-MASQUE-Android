@@ -2,6 +2,7 @@ package hidewifiwarp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
