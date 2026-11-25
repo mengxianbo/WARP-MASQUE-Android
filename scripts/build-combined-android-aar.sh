@@ -29,6 +29,10 @@ if [[ ! -f "$SINGBOX_DIR/go.mod" ]]; then
   module_dir="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["Dir"])' <<< "$module_json")"
   cp -a "$module_dir" "$SINGBOX_DIR"
 fi
+# Go's module cache marks downloaded source files read-only. The integration
+# step edits go.mod and adds a bridge source file, so make this private build
+# copy writable without changing the shared module cache.
+chmod -R u+rwX "$SINGBOX_DIR"
 
 cd "$SINGBOX_DIR"
 go mod edit -require=github.com/Diniboy1123/usque@v0.0.0
