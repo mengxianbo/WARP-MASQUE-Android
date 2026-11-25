@@ -16,6 +16,11 @@ if [[ -z "${ANDROID_NDK_HOME:-}" && -d "$ANDROID_HOME/ndk/26.3.11579264" ]]; the
   export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/26.3.11579264"
 fi
 
+mkdir -p "$ANDROID_PROJECT/app/libs"
+curl -fL --retry 3 https://github.com/singbox-android/libbox/releases/download/1.14.4/libbox.aar -o "$ANDROID_PROJECT/app/libs/libbox.aar"
+echo "d2685924a657705beda44e94c6dc499e781df1ad20d65474e3591ec2f8b96465  $ANDROID_PROJECT/app/libs/libbox.aar" | sha256sum -c -
+python3 "$ROOT/scripts/integrate-sing-box.py"
+
 cd "$UPSTREAM/android"
 make init
 make android
