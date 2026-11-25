@@ -76,7 +76,6 @@ option_type = (
     "type WarpOutboundOptions struct {\n"
     "\tConfigPath string `json:\"config_path\"`\n"
     "\tSNI        string `json:\"sni,omitempty\"`\n"
-    "\tInsecure   bool   `json:\"insecure,omitempty\"`\n"
     "}\n"
 )
 content = option_file.read_text(encoding="utf-8")
