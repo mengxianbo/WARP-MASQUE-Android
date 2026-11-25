@@ -34,7 +34,7 @@ object Usqueandroid {
     fun startTunnel(
         configPath: String,
         tunFd: Long,
-        mtu: Int,
+        mtu: Long,
         packetFlow: PacketFlow,
         callback: VpnStateCallback
     ): String = Libbox.warpStartTunnel(
