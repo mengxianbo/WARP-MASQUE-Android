@@ -2,7 +2,11 @@ package hidewifiwarp
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"net"
 	"os"
@@ -62,13 +66,25 @@ func NewOutbound(
 		return nil, E.Cause(err, "warp outbound: decode config")
 	}
 
-	privateKey, err := warpConfig.GetEcPrivateKey()
+	privateKeyBytes, err := base64.StdEncoding.DecodeString(warpConfig.PrivateKey)
+	if err != nil {
+		return nil, E.Cause(err, "warp outbound: decode private key")
+	}
+	privateKey, err := x509.ParseECPrivateKey(privateKeyBytes)
 	if err != nil {
 		return nil, E.Cause(err, "warp outbound: parse private key")
 	}
-	peerPublicKey, err := warpConfig.GetEcEndpointPublicKey()
+	peerPublicKeyBlock, _ := pem.Decode([]byte(warpConfig.EndpointPubKey))
+	if peerPublicKeyBlock == nil {
+		return nil, E.New("warp outbound: decode endpoint public key PEM")
+	}
+	parsedPeerKey, err := x509.ParsePKIXPublicKey(peerPublicKeyBlock.Bytes)
 	if err != nil {
 		return nil, E.Cause(err, "warp outbound: parse endpoint public key")
+	}
+	peerPublicKey, ok := parsedPeerKey.(*ecdsa.PublicKey)
+	if !ok {
+		return nil, E.New("warp outbound: endpoint public key is not ECDSA")
 	}
 	certificate, err := internal.GenerateCert(privateKey, &privateKey.PublicKey)
 	if err != nil {
@@ -138,15 +154,9 @@ func NewOutbound(
 	}, nil
 }
 
-func jsonUnmarshalConfig(data []byte, target *config.Config) error {
-	return json.Unmarshal(data, target)
-}
-
 func (o *Outbound) Start(stage adapter.StartStage, scope *adapter.Scope) error {
 	if stage == adapter.StartStateInitialize {
-		scope.Add(func() {
-			_ = o.proxy.Close()
-		})
+		scope.Add(o.proxy.Close)
 	}
 	return nil
 }
