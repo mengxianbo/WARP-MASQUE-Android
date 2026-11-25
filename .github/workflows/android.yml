@@ -2,7 +2,7 @@ name: Android APK
 
 on:
   push:
-    branches: [main, feature/http-lan-proxy-auth, feature/doh-fail-closed-release]
+    branches: [main, feature/http-lan-proxy-auth, feature/doh-fail-closed-release, feature/sing-box-gpl3-integration]
     tags: ["v*"]
   pull_request:
     branches: [main]
@@ -41,6 +41,13 @@ jobs:
         with:
           packages: "platform-tools platforms;android-34 build-tools;34.0.0 ndk;26.3.11579264"
 
+      - name: Download pinned sing-box libbox AAR
+        run: |
+          set -euo pipefail
+          mkdir -p upstream/usque-android/android/usque-vpn/app/libs
+          curl -fL --retry 3 https://github.com/singbox-android/libbox/releases/download/1.14.4/libbox.aar -o upstream/usque-android/android/usque-vpn/app/libs/libbox.aar
+          echo "d2685924a657705beda44e94c6dc499e781df1ad20d65474e3591ec2f8b96465  upstream/usque-android/android/usque-vpn/app/libs/libbox.aar" | sha256sum -c -
+
       - name: Configure Android NDK
         run: echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.3.11579264" >> "$GITHUB_ENV"
 
@@ -56,6 +63,9 @@ jobs:
 
       - name: Apply Hide Wi-Fi branding and authenticated LAN HTTP proxy
         run: python3 scripts/customize-hide-wifi.py
+
+      - name: Prepare sing-box Android dependency
+        run: python3 scripts/integrate-sing-box.py
 
       - name: Build Go Android AAR for both ABIs
         working-directory: upstream/usque-android/android
