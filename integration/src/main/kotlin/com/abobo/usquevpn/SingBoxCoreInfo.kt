@@ -1,6 +1,9 @@
 package com.abobo.usquevpn
 
-/** Compile-time/runtime bridge for the official sing-box libbox Android AAR. */
+import io.nekohasekai.libbox.Libbox
+
+/** Runtime identity for the unified sing-box + WARP Go library. */
 object SingBoxCoreInfo {
-    fun version(): String = libbox.Libbox.version()
+    fun version(): String = Libbox.version()
+    fun warpVersion(): String = Libbox.warpGetVersion()
 }
