@@ -2,11 +2,15 @@ name: Android APK
 
 on:
   push:
-    branches: [main, feature/http-lan-proxy-auth, feature/doh-fail-closed-release]
+    branches: [main, feature/http-lan-proxy-auth, feature/doh-fail-closed-release, feature/sing-box-gpl3-integration, feature/warp-native-outbound]
     tags: ["v*"]
   pull_request:
     branches: [main]
   workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -57,13 +61,11 @@ jobs:
       - name: Apply Hide Wi-Fi branding and authenticated LAN HTTP proxy
         run: python3 scripts/customize-hide-wifi.py
 
-      - name: Build Go Android AAR for both ABIs
-        working-directory: upstream/usque-android/android
-        run: |
-          make init
-          make android
-          mkdir -p usque-vpn/app/libs
-          cp usque.aar usque-vpn/app/libs/usque.aar
+      - name: Prepare sing-box Android dependency
+        run: python3 scripts/integrate-sing-box.py
+
+      - name: Build combined Go Android AAR (WARP + sing-box, one gomobile runtime)
+        run: bash scripts/build-combined-android-aar.sh
 
       - name: Enforce Android 8.0 minimum
         run: |

@@ -16,11 +16,8 @@ if [[ -z "${ANDROID_NDK_HOME:-}" && -d "$ANDROID_HOME/ndk/26.3.11579264" ]]; the
   export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/26.3.11579264"
 fi
 
-cd "$UPSTREAM/android"
-make init
-make android
-mkdir -p "$ANDROID_PROJECT/app/libs"
-cp usque.aar "$ANDROID_PROJECT/app/libs/usque.aar"
+python3 "$ROOT/scripts/integrate-sing-box.py"
+bash "$ROOT/scripts/build-combined-android-aar.sh"
 
 sed -i 's/minSdk = 24/minSdk = 26/' "$ANDROID_PROJECT/app/build.gradle.kts"
 cd "$ANDROID_PROJECT"

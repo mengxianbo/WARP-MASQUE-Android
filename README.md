@@ -76,3 +76,7 @@ APK 输出路径：`app/build/outputs/apk/debug/app-debug.apk`。
 ## 免责声明
 
 本项目是社区项目，与 Cloudflare, Inc. 无隶属、赞助或背书关系。WARP、Cloudflare 及相关商标归其各自所有者所有。MASQUE 核心是非官方实现，按原样提供；使用者应自行遵守当地法律及 Cloudflare 服务条款。CI 成功不代表已在所有 Android 设备/网络环境完成实机验证。
+
+## License
+
+Hide Wi-Fi project code maintained in this repository is licensed under the GNU General Public License v3.0 only; see [LICENSE](LICENSE). Third-party components retain their own licenses and notices. In particular, the pinned `usque-android` submodule remains under its upstream MIT license. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Before distributing a build containing sing-box/libbox, the exact libbox source revision, corresponding source, transitive notices and any upstream additional terms must also be included.
