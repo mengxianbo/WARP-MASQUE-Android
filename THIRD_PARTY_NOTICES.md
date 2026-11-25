@@ -13,7 +13,9 @@ Hide Wi-Fi project code maintained in this repository is licensed under GNU GPL 
 ### sing-box / libbox (planned integration)
 - Upstream Android library: https://github.com/singbox-android/libbox
 - Upstream project: https://github.com/SagerNet/sing-box
-- License: GPL-3.0-or-later (verify the exact source revision and all additional terms before each release).
+- Version: 1.14.4 (release tag `1.14.4`, published 2026-10-25).
+- AAR SHA-256: `d2685924a657705beda44e94c6dc499e781df1ad20d65474e3591ec2f8b96465`.
+- License: GPL-3.0-or-later. The project pins this upstream release; preserve the upstream license and notices.
 - The libbox source revision, binary build provenance, complete corresponding source, transitive dependency licenses, and any upstream additional terms must be recorded here before distributing an APK containing libbox.
 - Do not imply that Hide Wi-Fi is an official sing-box or SagerNet application.
 
