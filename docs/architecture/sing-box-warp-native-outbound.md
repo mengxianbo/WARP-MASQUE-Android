@@ -69,9 +69,9 @@ The Android config builder still needs to supply the actual private app config p
 
 ## Important distinction: current bridge is not this adapter
 
-The existing `hidewifi_warp_bridge.go` calls `usqueandroid.StartTunnel(...)` / `StartTunnelWithFd(...)`. Those APIs start or attach a WARP tunnel to a TUN file descriptor. Binding those methods into the same gomobile `libbox` package does **not** make WARP a sing-box outbound and does **not** prove there is only one TUN owner. Do not use that bridge as the implementation of VLESS -> WARP.
+The existing `hidewifi_warp_bridge.go` still exposes legacy `StartTunnel(...)` / `StartTunnelWithFd(...)` methods for compatibility with the old WARP UI. Those APIs attach a WARP tunnel to a TUN file descriptor and are **not** used by the new `hidewifiwarp.Outbound`. Never run the legacy tunnel concurrently with the sing-box VPN service.
 
-Before replacing it, inspect the exact pinned usque Android API and the sing-box v1.14.4 registry, dialer, lifecycle, and Android socket-protection APIs. Add compile-time interface assertions against the pinned version.
+The new outbound is registered in the pinned sing-box v1.14.4 registry and uses usque's L4 MASQUE CONNECT implementation. Its underlay UDP socket is created through sing-box's Android socket-protection callback.
 
 ## Acceptance criteria
 
