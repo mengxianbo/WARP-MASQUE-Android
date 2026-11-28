@@ -10,7 +10,7 @@ import java.util.UUID
 /** Persists imported proxy profiles and separately managed SOCKS/HTTP outbounds. */
 class SingBoxNodeStore(context: Context) {
     data class Node(val id: String, val name: String, val scheme: String, val shareUri: String, val route: String)
-    data class OutboundProxy(val id: String, val name: String, val type: String, val host: String, val port: Int, val username: String, val password: String, val tls: Boolean)
+    data class OutboundProxy(val id: String, val name: String, val type: String, val host: String, val port: Int, val tls: Boolean)
 
     private val prefs = context.getSharedPreferences("singbox_nodes", Context.MODE_PRIVATE)
     private val key = "profiles"
@@ -58,17 +58,17 @@ class SingBoxNodeStore(context: Context) {
         val a = JSONArray(prefs.getString(outboundKey, "[]"))
         return (0 until a.length()).mapNotNull { i ->
             val o = a.optJSONObject(i) ?: return@mapNotNull null
-            OutboundProxy(o.optString("id"), o.optString("name"), o.optString("type"), o.optString("host"), o.optInt("port"), o.optString("username"), o.optString("password"), o.optBoolean("tls"))
+            OutboundProxy(o.optString("id"), o.optString("name"), o.optString("type"), o.optString("host"), o.optInt("port"), o.optBoolean("tls"))
         }
     }
 
-    @Synchronized fun addProxy(name: String, type: String, host: String, port: Int, username: String, password: String, tls: Boolean): OutboundProxy {
+    @Synchronized fun addProxy(name: String, type: String, host: String, port: Int, tls: Boolean): OutboundProxy {
         require(type == "socks" || type == "http") { "代理类型无效" }
         require(name.isNotBlank()) { "请填写名称" }
         require(host.isNotBlank() && !host.contains("://") && !host.contains('/')) { "服务器地址无效，请只填写域名或 IP" }
         require(port in 1..65535) { "端口必须在 1-65535 之间" }
         require(type != "socks" || !tls) { "SOCKS5 不使用此 HTTPS/TLS 选项" }
-        val item = OutboundProxy(UUID.randomUUID().toString(), name.trim(), type, host.trim(), port, username, password, tls)
+        val item = OutboundProxy(UUID.randomUUID().toString(), name.trim(), type, host.trim(), port, tls)
         saveProxies(proxies() + item)
         return item
     }
@@ -99,7 +99,7 @@ class SingBoxNodeStore(context: Context) {
     private fun saveProxies(items: List<OutboundProxy>) {
         val a = JSONArray()
         items.forEach { p ->
-            a.put(JSONObject().put("id", p.id).put("name", p.name).put("type", p.type).put("host", p.host).put("port", p.port).put("username", p.username).put("password", p.password).put("tls", p.tls))
+            a.put(JSONObject().put("id", p.id).put("name", p.name).put("type", p.type).put("host", p.host).put("port", p.port).put("tls", p.tls))
         }
         prefs.edit().putString(outboundKey, a.toString()).apply()
     }
