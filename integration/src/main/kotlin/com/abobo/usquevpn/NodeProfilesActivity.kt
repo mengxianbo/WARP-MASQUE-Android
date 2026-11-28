@@ -56,8 +56,6 @@ class NodeProfilesActivity : Activity() {
         val name = field("名称，例如：我的代理出口")
         val host = field("服务器域名或 IP")
         val port = field("端口", InputType.TYPE_CLASS_NUMBER)
-        val username = field("用户名（可选）")
-        val password = field("密码（可选）", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
         val tls = CheckBox(this).apply {
             text = "HTTPS / TLS"
             visibility = if (type == "http") android.view.View.VISIBLE else android.view.View.GONE
@@ -68,7 +66,7 @@ class NodeProfilesActivity : Activity() {
             .setPositiveButton("保存") { _, _ ->
                 try {
                     store.addProxy(name.text.toString().ifBlank { if (type == "socks") "SOCKS5" else "HTTP" },
-                        type, host.text.toString(), port.text.toString().toInt(), username.text.toString(), password.text.toString(), tls.isChecked)
+                        type, host.text.toString(), port.text.toString().toInt(), tls.isChecked)
                     refresh()
                     Toast.makeText(this, "出站已保存", Toast.LENGTH_SHORT).show()
                 } catch (e: Exception) { Toast.makeText(this, e.message ?: "保存失败", Toast.LENGTH_LONG).show() }
