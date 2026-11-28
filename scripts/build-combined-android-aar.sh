@@ -140,6 +140,10 @@ GO_BRIDGE
 
 # Compile-check the custom WARP outbound and libbox bridge before binding.
 gofmt -w protocol/hidewifiwarp/outbound.go experimental/libbox/hidewifi_warp_bridge.go "$UPSTREAM/api/l4proxy.go" "$UPSTREAM/api/hidewifi_config.go"
+
+# The first tidy runs before the generated Android bridge exists and may prune
+# the local usque requirement. Re-run tidy now that all generated Go imports exist.
+go mod tidy
 go test -run '^$' -tags=with_gvisor,with_quic,with_wireguard,with_utls,with_naive_outbound,with_clash_api,with_usbip,with_openvpn,with_openconnect,badlinkname,tfogo_checklinkname0,with_tailscale,ts_omit_logtail,ts_omit_ssh,ts_omit_drive,ts_omit_taildrop,ts_omit_webclient,ts_omit_doctor,ts_omit_capture,ts_omit_kube,ts_omit_aws,ts_omit_synology,ts_omit_bird ./protocol/hidewifiwarp ./experimental/libbox
 
 "$GOBIN/gomobile" bind -v \
