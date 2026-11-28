@@ -37,7 +37,8 @@ chmod -R u+rwX "$SINGBOX_DIR"
 cd "$SINGBOX_DIR"
 go mod edit -require=github.com/Diniboy1123/usque@v0.0.0
 go mod edit -replace="github.com/Diniboy1123/usque=$UPSTREAM"
-go mod download
+# Resolve and record every transitive dependency used by the generated sing-box + WARP bridge.
+go mod tidy
 
 # Inject the real sing-box WARP MASQUE TCP outbound and Android-protected
 # QUIC underlay socket factory into the pinned source copies.
